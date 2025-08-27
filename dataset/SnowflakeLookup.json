@@ -1,0 +1,36 @@
+{
+	"name": "SnowflakeLookup",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "SnowflakeCN",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "SnowflakeV2Table",
+		"schema": [
+			{
+				"name": "TENANT_ID",
+				"type": "NUMBER",
+				"precision": 38,
+				"scale": 0
+			},
+			{
+				"name": "TENANT_NAME",
+				"type": "VARCHAR",
+				"precision": 0,
+				"scale": 0
+			},
+			{
+				"name": "CREATED_AT",
+				"type": "TIMESTAMP_NTZ",
+				"precision": 0,
+				"scale": 9
+			}
+		],
+		"typeProperties": {
+			"schema": "TONILO_WAREHOUSE",
+			"table": "DIM_TENANT"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}
