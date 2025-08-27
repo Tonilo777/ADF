@@ -1,0 +1,139 @@
+{
+	"name": "Snowflake",
+	"properties": {
+		"activities": [
+			{
+				"name": "Copy data1",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Set variable1",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"deleteFilesAfterCompletion": false
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings",
+							"maxConcurrentConnections": 1,
+							"copyBehavior": "PreserveHierarchy"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_ClientSource",
+						"type": "DatasetReference",
+						"parameters": {
+							"containerName": {
+								"value": "@pipeline().parameters.containerName",
+								"type": "Expression"
+							},
+							"folderPath": {
+								"value": "@pipeline().parameters.companyId",
+								"type": "Expression"
+							},
+							"fileName": {
+								"value": "@pipeline().parameters.fileName",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_tenant1Sink",
+						"type": "DatasetReference",
+						"parameters": {
+							"companyFolder": "@pipeline().parameters.folderPath",
+							"fileName": {
+								"value": "@variables('TimestampFileName')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "Set variable1",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "TimestampFileName",
+					"value": {
+						"value": "@concat(\n  substring(pipeline().parameters.fileName, 0, lastIndexOf(pipeline().parameters.fileName, '.')),\n  '_',\n  formatDateTime(utcNow(), 'yyyyMMddHHmmss'),\n  '.',\n  last(array(split(pipeline().parameters.fileName, '.')))\n)\n",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"tenantId": {
+				"type": "string"
+			},
+			"containerName": {
+				"type": "string"
+			},
+			"relativePath": {
+				"type": "string"
+			},
+			"fileName": {
+				"type": "string"
+			},
+			"folderPath": {
+				"type": "string"
+			},
+			"companyId": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"Tenant": {
+				"type": "String"
+			},
+			"Container": {
+				"type": "String"
+			},
+			"RelativePath": {
+				"type": "String"
+			},
+			"FileName": {
+				"type": "String"
+			},
+			"TimestampFileName": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-08-25T07:48:42Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

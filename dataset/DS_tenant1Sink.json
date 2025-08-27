@@ -1,0 +1,34 @@
+{
+	"name": "DS_tenant1Sink",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "AzureBlobStorage1",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"companyFolder": {
+				"type": "string"
+			},
+			"fileName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@dataset().fileName",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().companyFolder",
+					"type": "Expression"
+				},
+				"container": "central"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

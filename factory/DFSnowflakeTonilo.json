@@ -1,0 +1,9 @@
+{
+	"name": "DFSnowflakeTonilo",
+	"location": "westeurope",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "05cc11d8-a6d0-4c73-bee1-71cf17bef0b3",
+		"tenantId": "eeefe17d-87d6-4ab5-ba0d-d1036a4f4863"
+	}
+}
