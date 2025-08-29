@@ -14,7 +14,7 @@
 					"tenant_id": "@split(triggerBody().folderPath,'/')[1]",
 					"company_id": "@split(triggerBody().folderPath,'/')[2]",
 					"file_name": "@triggerBody().fileName",
-					"sub_path": "@concat(split(triggerBody().folderPath,'/')[2], '/', split(triggerBody().folderPath,'/')[3])"
+					"sub_path": "@concat(split(triggerBody().folderPath,'/')[1], '/', split(triggerBody().folderPath,'/')[2])"
 				}
 			}
 		],
