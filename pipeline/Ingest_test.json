@@ -1,0 +1,432 @@
+{
+	"name": "Ingest_test",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Metadata1",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Resolve CompanyID",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_tenant1Sink",
+						"type": "DatasetReference",
+						"parameters": {
+							"companyFolder": {
+								"value": "@pipeline().parameters.sub_path",
+								"type": "Expression"
+							},
+							"fileName": {
+								"value": "@pipeline().parameters.file_name",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"size",
+						"lastModified",
+						"contentMD5"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Ingest queue",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Get Metadata1",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "SnowflakeCN",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "INSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  @{activity('Get Metadata1').output.size},\n  TO_TIMESTAMP_NTZ('@{activity('Get Metadata1').output.lastModified}'),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},       \n  @{variables('ResolvedCompanyID')},      \n  '@{pipeline().parameters.tenant_id}',   \n  '@{pipeline().parameters.company_id}'\n",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Insert",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Ingest queue",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "SnowflakeCN",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "CALL JAVATEST.JAVATEST1.PROC_INGEST_NEXT_MDB2()"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "dbt job call",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Insert",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Authorization": "Token dbtc_E6Qw_z80dL3U0sBjAh9Bsg_bZsgKRQ43mYbQoK0-lwLpDFj8ls",
+						"Content-Type": "application/json"
+					},
+					"url": "https://gz086.us1.dbt.com/api/v2/accounts/70471823487150/jobs/70471823499473/run/",
+					"body": {
+						"cause": "Triggered via API"
+					}
+				}
+			},
+			{
+				"name": "Truncate",
+				"type": "Script",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "SnowflakeCN",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "TRUNCATE TABLE javatest.javatest1.CITIES;\nTRUNCATE TABLE javatest.javatest1.CURRENCIES;\nTRUNCATE TABLE javatest.javatest1.INVOICES;\nTRUNCATE TABLE javatest.javatest1.TINVOICES;\nTRUNCATE TABLE javatest.javatest1.OFFERS;\nTRUNCATE TABLE javatest.javatest1.TOFFERS;\nTRUNCATE TABLE javatest.javatest1.ITEMS;\nTRUNCATE TABLE javatest.javatest1.ITEMGROUP;\nTRUNCATE TABLE javatest.javatest1.EMPLOYEES;\nTRUNCATE TABLE javatest.javatest1.TEMPLOYEES;\nTRUNCATE TABLE javatest.javatest1.WAREHOUSES;\nTRUNCATE TABLE javatest.javatest1.CUSTOMERLIST;\nTRUNCATE TABLE javatest.javatest1.ITEMSTOCK;\nTRUNCATE TABLE javatest.javatest1.MATERIAL;\nTRUNCATE TABLE javatest.javatest1.MATERIALSTOCK;\nTRUNCATE TABLE javatest.javatest1.TITEMS;\nTRUNCATE TABLE javatest.javatest1.PARTNERS;\nTRUNCATE TABLE javatest.javatest1.TPARTNERS;\nTRUNCATE TABLE javatest.javatest1.BANK;\nTRUNCATE TABLE javatest.javatest1.ACCOUNTS;\nTRUNCATE TABLE javatest.javatest1.FISOPERATOR;\nTRUNCATE TABLE javatest.javatest1.INTCOUNTRY;\n"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "LookupTenant",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Tenant merge",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "SELECT tenant_ID \nFROM javatest.tonilo_warehouse.dim_tenant \nWHERE tenant_name = '@{pipeline().parameters.tenant_id}'\n",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "SnowflakeLookup",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "LookupCompany",
+				"description": "",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Company merge",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "SELECT company_ID\nFROM javatest.tonilo_warehouse.dim_company\nWHERE tenant_ID = '@{variables('ResolvedTenantID')}'\n  AND company_name = '@{pipeline().parameters.company_id}'\n",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "SnowflakeLookup",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "Tenant merge",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "SnowflakeCN",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_TENANT AS tgt\nUSING (\n    SELECT\n        '@{pipeline().parameters.tenant_id}' AS TENANT_NAME\n) AS src\nON tgt.tenant_name = src.tenant_name\nWHEN MATCHED THEN\n    UPDATE SET tenant_name = src.tenant_name   -- optional, usually no-op\nWHEN NOT MATCHED THEN\n    INSERT (tenant_name, created_at)\n    VALUES (src.tenant_name, CURRENT_TIMESTAMP);\n",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Resolve tenantID",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "LookupTenant",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "ResolvedTenantID",
+					"value": {
+						"value": "@string(activity('LookupTenant').output.firstRow.TENANT_ID)\n",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Company merge",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Resolve tenantID",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "SnowflakeCN",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_COMPANY AS tgt\nUSING (\n    SELECT\n        @{variables('ResolvedTenantID')}      AS TENANT_ID,\n        '@{pipeline().parameters.company_id}' AS COMPANY_NAME\n) AS src\nON  tgt.tenant_id    = src.tenant_id\nAND tgt.company_name = src.company_name\n\nWHEN MATCHED THEN\n    UPDATE SET company_name = src.company_name   -- optional, usually no-op\n\nWHEN NOT MATCHED THEN\n    INSERT (tenant_id, company_name, created_at)\n    VALUES (src.tenant_id, src.company_name, CURRENT_TIMESTAMP);\n",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Resolve CompanyID",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "LookupCompany",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "ResolvedCompanyID",
+					"value": {
+						"value": "@string(activity('LookupCompany').output.firstRow.COMPANY_ID)\n",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Script1",
+				"type": "Script",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "SnowflakeCN",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "UPDATE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\nSET \n  STATUS = 'DLQ',\n  ERROR = OBJECT_CONSTRUCT(\n    'errorType', 'DBT',\n    'errorMessage', '@{activity('dbt job call').output.error.errors[0].Message}',\n    'relativePath', RELATIVE_PATH,\n    'tenantId', TENANT_ID,\n    'companyId', COMPANY_ID\n  ),\n  FINISHED_AT = CURRENT_TIMESTAMP()\nWHERE RELATIVE_PATH = '@{pipeline().parameters.relative_path}';\n",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"parameters": {
+			"relative_path": {
+				"type": "string"
+			},
+			"tenant_id": {
+				"type": "string"
+			},
+			"company_id": {
+				"type": "string"
+			},
+			"file_name": {
+				"type": "string"
+			},
+			"sub_path": {
+				"type": "string"
+			},
+			"ResolvedTenantID": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"ResolvedTenantID": {
+				"type": "String"
+			},
+			"ResolvedCompanyID": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-08-27T13:01:05Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}
