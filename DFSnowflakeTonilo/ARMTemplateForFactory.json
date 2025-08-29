@@ -582,7 +582,7 @@
 			"properties": {
 				"activities": [
 					{
-						"name": "Get Metadata1",
+						"name": "File Size Validation",
 						"type": "GetMetadata",
 						"dependsOn": [
 							{
@@ -592,6 +592,302 @@
 								]
 							}
 						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "DS_tenant1Sink",
+								"type": "DatasetReference",
+								"parameters": {
+									"companyFolder": {
+										"value": "@pipeline().parameters.sub_path",
+										"type": "Expression"
+									},
+									"fileName": {
+										"value": "@pipeline().parameters.file_name",
+										"type": "Expression"
+									}
+								}
+							},
+							"fieldList": [
+								"size",
+								"lastModified",
+								"exists"
+							],
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							},
+							"formatSettings": {
+								"type": "BinaryReadSettings"
+							}
+						}
+					},
+					{
+						"name": "File Size Validation Check",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "File Size Validation",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@and(greater(activity('File Size Validation').output.size, 0), less(activity('File Size Validation').output.size, pipeline().parameters.max_file_size_bytes))",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "Log File Size Error",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "SnowflakeCN",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "NonQuery",
+												"text": {
+													"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'File size validation failed',\n  OBJECT_CONSTRUCT('fileSize', '@{activity('File Size Validation').output.size}', 'maxAllowed', 1073741824);",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Duplicate File Check",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "File Size Validation Check",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "SnowflakeV2Source",
+								"query": {
+									"value": "SELECT COUNT(*) as duplicate_count\nFROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE \nWHERE RELATIVE_PATH = '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}'\n  AND STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n  AND ENQUEUED_AT >= DATEADD('hour', -24, CURRENT_TIMESTAMP());",
+									"type": "Expression"
+								},
+								"exportSettings": {
+									"type": "SnowflakeExportCopyCommand"
+								}
+							},
+							"dataset": {
+								"referenceName": "SnowflakeLookup",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "Duplicate File Validation",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "Duplicate File Check",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(activity('Duplicate File Check').output.firstRow.DUPLICATE_COUNT, 0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "Log Duplicate File Error",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "SnowflakeCN",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "NonQuery",
+												"text": {
+													"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'Duplicate file detected',\n  OBJECT_CONSTRUCT('duplicateCount', '@{activity('Duplicate File Check').output.firstRow.DUPLICATE_COUNT}');",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Business Rules Validation",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Duplicate File Validation",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 1,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "-- Business Rules Validation\nSELECT \n  CASE \n    WHEN NOT ENDSWITH('@{pipeline().parameters.file_name}', '.mdb') THEN 'Invalid file format: must be .mdb'\n    WHEN LENGTH('@{pipeline().parameters.tenant_id}') = 0 THEN 'Invalid tenant ID: cannot be empty'\n    WHEN LENGTH('@{pipeline().parameters.company_id}') = 0 THEN 'Invalid company ID: cannot be empty'\n    WHEN '@{activity('File Size Validation').output.lastModified}' < DATEADD('day', -30, CURRENT_TIMESTAMP()) THEN 'File too old: older than 30 days'\n    WHEN '@{activity('File Size Validation').output.lastModified}' > DATEADD('hour', 1, CURRENT_TIMESTAMP()) THEN 'File from future: invalid timestamp'\n    ELSE 'VALID'\n  END as validation_result,\n  '@{pipeline().parameters.file_name}' as file_name,\n  '@{pipeline().parameters.tenant_id}' as tenant_id,\n  '@{pipeline().parameters.company_id}' as company_id,\n  '@{activity('File Size Validation').output.size}' as file_size,\n  '@{activity('File Size Validation').output.lastModified}' as last_modified;",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Business Rules Check",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "Business Rules Validation",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(activity('Business Rules Validation').output.resultSets[0].rows[0][0], 'VALID')",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "Log Business Rules Error",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "SnowflakeCN",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "NonQuery",
+												"text": {
+													"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'Business rules validation failed',\n  OBJECT_CONSTRUCT('validationResult', '@{activity('Business Rules Validation').output.resultSets[0].rows[0][0]}');",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "Log Validation Success",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "SnowflakeCN",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "NonQuery",
+												"text": {
+													"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, START_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_PASSED',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'All pre-processing validations passed',\n  OBJECT_CONSTRUCT(\n    'fileSize', '@{activity('File Size Validation').output.size}',\n    'lastModified', '@{activity('File Size Validation').output.lastModified}',\n    'duplicateCheck', '@{activity('Duplicate File Check').output.firstRow.DUPLICATE_COUNT}',\n    'businessRulesResult', '@{activity('Business Rules Validation').output.resultSets[0].rows[0][0]}'\n  );",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Get Metadata1",
+						"type": "GetMetadata",
+						"dependsOn": [],
 						"policy": {
 							"timeout": "0.12:00:00",
 							"retry": 0,
@@ -1112,6 +1408,22 @@
 					},
 					"ResolvedTenantID": {
 						"type": "string"
+					},
+					"max_file_size_bytes": {
+						"type": "int",
+						"defaultValue": 1073741824
+					},
+					"max_file_age_days": {
+						"type": "int",
+						"defaultValue": 30
+					},
+					"enable_duplicate_check": {
+						"type": "bool",
+						"defaultValue": true
+					},
+					"enable_business_rules_validation": {
+						"type": "bool",
+						"defaultValue": true
 					}
 				},
 				"variables": {
@@ -1127,8 +1439,8 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/DS_tenant1Sink')]",
-				"[concat(variables('factoryId'), '/linkedServices/SnowflakeCN')]",
-				"[concat(variables('factoryId'), '/datasets/SnowflakeLookup')]"
+				"[concat(variables('factoryId'), '/datasets/SnowflakeLookup')]",
+				"[concat(variables('factoryId'), '/linkedServices/SnowflakeCN')]"
 			]
 		},
 		{
