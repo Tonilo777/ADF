@@ -78,9 +78,45 @@
 				]
 			},
 			{
+				"name": "Log Pipeline Start",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "SnowflakeCN",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, START_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'STARTED', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Snowflake pipeline execution started');",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
 				"name": "Set variable1",
 				"type": "SetVariable",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "Log Pipeline Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"secureOutput": false,
 					"secureInput": false
@@ -92,6 +128,78 @@
 						"value": "@concat(\n  substring(pipeline().parameters.fileName, 0, lastIndexOf(pipeline().parameters.fileName, '.')),\n  '_',\n  formatDateTime(utcNow(), 'yyyyMMddHHmmss'),\n  '.',\n  last(array(split(pipeline().parameters.fileName, '.')))\n)\n",
 						"type": "Expression"
 					}
+				}
+			},
+			{
+				"name": "Log Copy Error",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Copy data1",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "SnowflakeCN",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Copy activity failed', '@{activity('Copy data1').error.message}');",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Log Pipeline Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Copy data1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "SnowflakeCN",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'SUCCESS', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Snowflake pipeline completed successfully');",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
 				}
 			}
 		],
