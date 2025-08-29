@@ -1,0 +1,32 @@
+{
+	"name": "TriggerSnowflake_test",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Started",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "Snowflake_test",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"tenantId": "@split(triggerBody().folderPath,'/')[0]",
+					"containerName": "@split(triggerBody().folderPath,'/')[0]",
+					"relativePath": "@concat(triggerBody().folderPath,'/',triggerBody().fileName)",
+					"fileName": "@triggerBody().fileName",
+					"folderPath": "@triggerBody().folderPath",
+					"companyId": "@split(triggerBody().folderPath,'/')[1]"
+				}
+			}
+		],
+		"type": "BlobEventsTrigger",
+		"typeProperties": {
+			"blobPathEndsWith": ".mdb",
+			"ignoreEmptyBlobs": true,
+			"scope": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/tonilosnowflk",
+			"events": [
+				"Microsoft.Storage.BlobCreated"
+			]
+		}
+	}
+}

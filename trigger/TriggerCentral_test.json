@@ -1,0 +1,32 @@
+{
+	"name": "TriggerCentral_test",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Started",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "Ingest_test",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"relative_path": "@triggerBody().folderPath",
+					"tenant_id": "@split(triggerBody().folderPath,'/')[1]",
+					"company_id": "@split(triggerBody().folderPath,'/')[2]",
+					"file_name": "@triggerBody().fileName",
+					"sub_path": "@concat(split(triggerBody().folderPath,'/')[1], '/', split(triggerBody().folderPath,'/')[2])\n"
+				}
+			}
+		],
+		"type": "BlobEventsTrigger",
+		"typeProperties": {
+			"blobPathBeginsWith": "/central/blobs/",
+			"blobPathEndsWith": ".mdb",
+			"ignoreEmptyBlobs": true,
+			"scope": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/ingestiontonilo",
+			"events": [
+				"Microsoft.Storage.BlobCreated"
+			]
+		}
+	}
+}
