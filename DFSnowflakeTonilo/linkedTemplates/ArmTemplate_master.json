@@ -29,11 +29,11 @@
 		},
 		"TriggerCentral_properties_Ingest_parameters_tenant_id": {
 			"type": "string",
-			"defaultValue": "@split(triggerBody().folderPath,'/')[1]"
+			"defaultValue": "@split(triggerBody().folderPath,'/')[2]"
 		},
 		"TriggerCentral_properties_Ingest_parameters_company_id": {
 			"type": "string",
-			"defaultValue": "@split(triggerBody().folderPath,'/')[2]"
+			"defaultValue": "@coalesce(split(triggerBody().folderPath,'/')[3], split(triggerBody().folderPath,'/')[2])"
 		},
 		"TriggerCentral_properties_Ingest_parameters_file_name": {
 			"type": "string",
@@ -41,7 +41,7 @@
 		},
 		"TriggerCentral_properties_Ingest_parameters_sub_path": {
 			"type": "string",
-			"defaultValue": "@concat(split(triggerBody().folderPath,'/')[1], '/', split(triggerBody().folderPath,'/')[2])\n"
+			"defaultValue": "@coalesce(concat(split(triggerBody().folderPath,'/')[2], '/', split(triggerBody().folderPath,'/')[3]), split(triggerBody().folderPath,'/')[2])"
 		},
 		"TriggerCentral_properties_typeProperties_scope": {
 			"type": "string",
@@ -53,11 +53,11 @@
 		},
 		"TriggerCentral_test_properties_Ingest_test_parameters_tenant_id": {
 			"type": "string",
-			"defaultValue": "@split(triggerBody().folderPath,'/')[1]"
+			"defaultValue": "@split(triggerBody().folderPath,'/')[2]"
 		},
 		"TriggerCentral_test_properties_Ingest_test_parameters_company_id": {
 			"type": "string",
-			"defaultValue": "@split(triggerBody().folderPath,'/')[2]"
+			"defaultValue": "@coalesce(split(triggerBody().folderPath,'/')[3], split(triggerBody().folderPath,'/')[2])"
 		},
 		"TriggerCentral_test_properties_Ingest_test_parameters_file_name": {
 			"type": "string",
@@ -65,7 +65,7 @@
 		},
 		"TriggerCentral_test_properties_Ingest_test_parameters_sub_path": {
 			"type": "string",
-			"defaultValue": "@concat(split(triggerBody().folderPath,'/')[1], '/', split(triggerBody().folderPath,'/')[2])\n"
+			"defaultValue": "@coalesce(concat(split(triggerBody().folderPath,'/')[2], '/', split(triggerBody().folderPath,'/')[3]), split(triggerBody().folderPath,'/')[2])"
 		},
 		"TriggerCentral_test_properties_typeProperties_scope": {
 			"type": "string",
@@ -93,7 +93,7 @@
 		},
 		"TriggerSnowflake_properties_Snowflake_parameters_companyId": {
 			"type": "string",
-			"defaultValue": "@split(triggerBody().folderPath,'/')[1]"
+			"defaultValue": "@coalesce(split(triggerBody().folderPath,'/')[1], split(triggerBody().folderPath,'/')[0])"
 		},
 		"TriggerSnowflake_properties_typeProperties_scope": {
 			"type": "string",
@@ -121,7 +121,7 @@
 		},
 		"TriggerSnowflake_test_properties_Snowflake_test_parameters_companyId": {
 			"type": "string",
-			"defaultValue": "@split(triggerBody().folderPath,'/')[1]"
+			"defaultValue": "@coalesce(split(triggerBody().folderPath,'/')[1], split(triggerBody().folderPath,'/')[0])"
 		},
 		"TriggerSnowflake_test_properties_typeProperties_scope": {
 			"type": "string",
