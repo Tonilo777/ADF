@@ -158,7 +158,7 @@
 						{
 							"type": "NonQuery",
 							"text": {
-								"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Copy activity failed', '@{activity('Copy data1').error.message}');",
+								"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT\nUUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Copy activity failed', '@{activity('Copy data1').error.message}'",
 								"type": "Expression"
 							}
 						}
@@ -194,7 +194,7 @@
 						{
 							"type": "NonQuery",
 							"text": {
-								"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'SUCCESS', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Snowflake pipeline completed successfully');",
+								"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nSELECT\nUUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'SUCCESS', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Snowflake pipeline completed successfully'",
 								"type": "Expression"
 							}
 						}
