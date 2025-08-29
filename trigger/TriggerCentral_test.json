@@ -12,9 +12,9 @@
 				"parameters": {
 					"relative_path": "@triggerBody().folderPath",
 					"tenant_id": "@split(triggerBody().folderPath,'/')[2]",
-					"company_id": "@coalesce(split(triggerBody().folderPath,'/')[3], split(triggerBody().folderPath,'/')[2])",
+					"company_id": "@if(equals(length(split(triggerBody().folderPath,'/')), 3), split(triggerBody().folderPath,'/')[2], split(triggerBody().folderPath,'/')[3])",
 					"file_name": "@triggerBody().fileName",
-					"sub_path": "@coalesce(concat(split(triggerBody().folderPath,'/')[2], '/', split(triggerBody().folderPath,'/')[3]), split(triggerBody().folderPath,'/')[2])"
+					"sub_path": "@if(equals(length(split(triggerBody().folderPath,'/')), 3), split(triggerBody().folderPath,'/')[2], concat(split(triggerBody().folderPath,'/')[2], '/', split(triggerBody().folderPath,'/')[3]))"
 				}
 			}
 		],

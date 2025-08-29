@@ -15,7 +15,7 @@
 					"relativePath": "@concat(triggerBody().folderPath,'/',triggerBody().fileName)",
 					"fileName": "@triggerBody().fileName",
 					"folderPath": "@triggerBody().folderPath",
-					"companyId": "@coalesce(split(triggerBody().folderPath,'/')[1], split(triggerBody().folderPath,'/')[0])"
+					"companyId": "@if(contains(triggerBody().folderPath, '/'), replace(triggerBody().folderPath, concat(first(split(triggerBody().folderPath, '/')), '/'), ''), triggerBody().folderPath)"
 				}
 			}
 		],
