@@ -198,6 +198,12 @@
 						"dependencyConditions": [
 							"Succeeded"
 						]
+					},
+					{
+						"activity": "File Size Validation",
+						"dependencyConditions": [
+							"Succeeded"
+						]
 					}
 				],
 				"policy": {
@@ -312,6 +318,12 @@
 				"dependsOn": [
 					{
 						"activity": "Log Validation Success",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "File Size Validation",
 						"dependencyConditions": [
 							"Succeeded"
 						]
