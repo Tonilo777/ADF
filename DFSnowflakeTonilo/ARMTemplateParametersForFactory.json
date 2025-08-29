@@ -42,13 +42,13 @@
 			"value": "@split(triggerBody().folderPath,'/')[2]"
 		},
 		"TriggerCentral_test_properties_Ingest_test_parameters_company_id": {
-			"value": "@coalesce(split(triggerBody().folderPath,'/')[3], split(triggerBody().folderPath,'/')[2])"
+			"value": "@if(equals(length(split(triggerBody().folderPath,'/')), 3), split(triggerBody().folderPath,'/')[2], split(triggerBody().folderPath,'/')[3])"
 		},
 		"TriggerCentral_test_properties_Ingest_test_parameters_file_name": {
 			"value": "@triggerBody().fileName"
 		},
 		"TriggerCentral_test_properties_Ingest_test_parameters_sub_path": {
-			"value": "@coalesce(concat(split(triggerBody().folderPath,'/')[2], '/', split(triggerBody().folderPath,'/')[3]), split(triggerBody().folderPath,'/')[2])"
+			"value": "@if(equals(length(split(triggerBody().folderPath,'/')), 3), split(triggerBody().folderPath,'/')[2], concat(split(triggerBody().folderPath,'/')[2], '/', split(triggerBody().folderPath,'/')[3]))"
 		},
 		"TriggerCentral_test_properties_typeProperties_scope": {
 			"value": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/ingestiontonilo"
@@ -90,7 +90,7 @@
 			"value": "@triggerBody().folderPath"
 		},
 		"TriggerSnowflake_test_properties_Snowflake_test_parameters_companyId": {
-			"value": "@coalesce(split(triggerBody().folderPath,'/')[1], split(triggerBody().folderPath,'/')[0])"
+			"value": "@if(contains(triggerBody().folderPath, '/'), replace(triggerBody().folderPath, concat(first(split(triggerBody().folderPath, '/')), '/'), ''), triggerBody().folderPath)"
 		},
 		"TriggerSnowflake_test_properties_typeProperties_scope": {
 			"value": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/tonilosnowflk"
