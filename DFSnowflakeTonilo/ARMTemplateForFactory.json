@@ -47,6 +47,30 @@
 			"type": "string",
 			"defaultValue": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/ingestiontonilo"
 		},
+		"TriggerCentral_test_properties_Ingest_test_parameters_relative_path": {
+			"type": "string",
+			"defaultValue": "@triggerBody().folderPath"
+		},
+		"TriggerCentral_test_properties_Ingest_test_parameters_tenant_id": {
+			"type": "string",
+			"defaultValue": "@split(triggerBody().folderPath,'/')[1]"
+		},
+		"TriggerCentral_test_properties_Ingest_test_parameters_company_id": {
+			"type": "string",
+			"defaultValue": "@split(triggerBody().folderPath,'/')[2]"
+		},
+		"TriggerCentral_test_properties_Ingest_test_parameters_file_name": {
+			"type": "string",
+			"defaultValue": "@triggerBody().fileName"
+		},
+		"TriggerCentral_test_properties_Ingest_test_parameters_sub_path": {
+			"type": "string",
+			"defaultValue": "@concat(split(triggerBody().folderPath,'/')[1], '/', split(triggerBody().folderPath,'/')[2])\n"
+		},
+		"TriggerCentral_test_properties_typeProperties_scope": {
+			"type": "string",
+			"defaultValue": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/ingestiontonilo"
+		},
 		"TriggerSnowflake_properties_Snowflake_parameters_tenantId": {
 			"type": "string",
 			"defaultValue": "@split(triggerBody().folderPath,'/')[0]"
@@ -72,6 +96,34 @@
 			"defaultValue": "@split(triggerBody().folderPath,'/')[1]"
 		},
 		"TriggerSnowflake_properties_typeProperties_scope": {
+			"type": "string",
+			"defaultValue": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/tonilosnowflk"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_tenantId": {
+			"type": "string",
+			"defaultValue": "@split(triggerBody().folderPath,'/')[0]"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_containerName": {
+			"type": "string",
+			"defaultValue": "@split(triggerBody().folderPath,'/')[0]"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_relativePath": {
+			"type": "string",
+			"defaultValue": "@concat(triggerBody().folderPath,'/',triggerBody().fileName)"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_fileName": {
+			"type": "string",
+			"defaultValue": "@triggerBody().fileName"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_folderPath": {
+			"type": "string",
+			"defaultValue": "@triggerBody().folderPath"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_companyId": {
+			"type": "string",
+			"defaultValue": "@split(triggerBody().folderPath,'/')[1]"
+		},
+		"TriggerSnowflake_test_properties_typeProperties_scope": {
 			"type": "string",
 			"defaultValue": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/tonilosnowflk"
 		}
@@ -524,6 +576,562 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/Ingest_test')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Get Metadata1",
+						"type": "GetMetadata",
+						"dependsOn": [
+							{
+								"activity": "Resolve CompanyID",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "DS_tenant1Sink",
+								"type": "DatasetReference",
+								"parameters": {
+									"companyFolder": {
+										"value": "@pipeline().parameters.sub_path",
+										"type": "Expression"
+									},
+									"fileName": {
+										"value": "@pipeline().parameters.file_name",
+										"type": "Expression"
+									}
+								}
+							},
+							"fieldList": [
+								"size",
+								"lastModified",
+								"contentMD5"
+							],
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							},
+							"formatSettings": {
+								"type": "BinaryReadSettings"
+							}
+						}
+					},
+					{
+						"name": "Ingest queue",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Get Metadata1",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "NonQuery",
+									"text": {
+										"value": "INSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  @{activity('Get Metadata1').output.size},\n  TO_TIMESTAMP_NTZ('@{activity('Get Metadata1').output.lastModified}'),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},       \n  @{variables('ResolvedCompanyID')},      \n  '@{pipeline().parameters.tenant_id}',   \n  '@{pipeline().parameters.company_id}'\n",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Insert",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Ingest queue",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": "CALL JAVATEST.JAVATEST1.PROC_INGEST_NEXT_MDB2()"
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "dbt job call",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Insert",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {
+								"Authorization": "Token dbtc_E6Qw_z80dL3U0sBjAh9Bsg_bZsgKRQ43mYbQoK0-lwLpDFj8ls",
+								"Content-Type": "application/json"
+							},
+							"url": "https://gz086.us1.dbt.com/api/v2/accounts/70471823487150/jobs/70471823499473/run/",
+							"body": {
+								"cause": "Triggered via API"
+							}
+						}
+					},
+					{
+						"name": "Truncate",
+						"type": "Script",
+						"state": "Inactive",
+						"onInactiveMarkAs": "Succeeded",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": "TRUNCATE TABLE javatest.javatest1.CITIES;\nTRUNCATE TABLE javatest.javatest1.CURRENCIES;\nTRUNCATE TABLE javatest.javatest1.INVOICES;\nTRUNCATE TABLE javatest.javatest1.TINVOICES;\nTRUNCATE TABLE javatest.javatest1.OFFERS;\nTRUNCATE TABLE javatest.javatest1.TOFFERS;\nTRUNCATE TABLE javatest.javatest1.ITEMS;\nTRUNCATE TABLE javatest.javatest1.ITEMGROUP;\nTRUNCATE TABLE javatest.javatest1.EMPLOYEES;\nTRUNCATE TABLE javatest.javatest1.TEMPLOYEES;\nTRUNCATE TABLE javatest.javatest1.WAREHOUSES;\nTRUNCATE TABLE javatest.javatest1.CUSTOMERLIST;\nTRUNCATE TABLE javatest.javatest1.ITEMSTOCK;\nTRUNCATE TABLE javatest.javatest1.MATERIAL;\nTRUNCATE TABLE javatest.javatest1.MATERIALSTOCK;\nTRUNCATE TABLE javatest.javatest1.TITEMS;\nTRUNCATE TABLE javatest.javatest1.PARTNERS;\nTRUNCATE TABLE javatest.javatest1.TPARTNERS;\nTRUNCATE TABLE javatest.javatest1.BANK;\nTRUNCATE TABLE javatest.javatest1.ACCOUNTS;\nTRUNCATE TABLE javatest.javatest1.FISOPERATOR;\nTRUNCATE TABLE javatest.javatest1.INTCOUNTRY;\n"
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "LookupTenant",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "Tenant merge",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "SnowflakeV2Source",
+								"query": {
+									"value": "SELECT tenant_ID \nFROM javatest.tonilo_warehouse.dim_tenant \nWHERE tenant_name = '@{pipeline().parameters.tenant_id}'\n",
+									"type": "Expression"
+								},
+								"exportSettings": {
+									"type": "SnowflakeExportCopyCommand"
+								}
+							},
+							"dataset": {
+								"referenceName": "SnowflakeLookup",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "LookupCompany",
+						"description": "",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "Company merge",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "SnowflakeV2Source",
+								"query": {
+									"value": "SELECT company_ID\nFROM javatest.tonilo_warehouse.dim_company\nWHERE tenant_ID = '@{variables('ResolvedTenantID')}'\n  AND company_name = '@{pipeline().parameters.company_id}'\n",
+									"type": "Expression"
+								},
+								"exportSettings": {
+									"type": "SnowflakeExportCopyCommand"
+								}
+							},
+							"dataset": {
+								"referenceName": "SnowflakeLookup",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "Tenant merge",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Log Pipeline Start",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "NonQuery",
+									"text": {
+										"value": "MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_TENANT AS tgt\nUSING (\n    SELECT\n        '@{pipeline().parameters.tenant_id}' AS TENANT_NAME\n) AS src\nON tgt.tenant_name = src.tenant_name\nWHEN MATCHED THEN\n    UPDATE SET tenant_name = src.tenant_name   -- optional, usually no-op\nWHEN NOT MATCHED THEN\n    INSERT (tenant_name, created_at)\n    VALUES (src.tenant_name, CURRENT_TIMESTAMP);\n",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Resolve tenantID",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "LookupTenant",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "ResolvedTenantID",
+							"value": {
+								"value": "@string(activity('LookupTenant').output.firstRow.TENANT_ID)\n",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Company merge",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Resolve tenantID",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "NonQuery",
+									"text": {
+										"value": "MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_COMPANY AS tgt\nUSING (\n    SELECT\n        @{variables('ResolvedTenantID')}      AS TENANT_ID,\n        '@{pipeline().parameters.company_id}' AS COMPANY_NAME\n) AS src\nON  tgt.tenant_id    = src.tenant_id\nAND tgt.company_name = src.company_name\n\nWHEN MATCHED THEN\n    UPDATE SET company_name = src.company_name   -- optional, usually no-op\n\nWHEN NOT MATCHED THEN\n    INSERT (tenant_id, company_name, created_at)\n    VALUES (src.tenant_id, src.company_name, CURRENT_TIMESTAMP);\n",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Resolve CompanyID",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "LookupCompany",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "ResolvedCompanyID",
+							"value": {
+								"value": "@string(activity('LookupCompany').output.firstRow.COMPANY_ID)\n",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Log Pipeline Start",
+						"type": "Script",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "NonQuery",
+									"text": {
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, START_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'STARTED', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Pipeline execution started');",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Log Get Metadata Error",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Get Metadata1",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "NonQuery",
+									"text": {
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nVALUES\n(UUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Get Metadata failed', '@{activity('Get Metadata1').error.message}');",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Log DBT Error",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "dbt job call",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "NonQuery",
+									"text": {
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nVALUES\n(UUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'DBT job failed', '@{activity('dbt job call').error.message}');\n\n-- Also update the queue table\nUPDATE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\nSET \n  STATUS = 'DLQ',\n  ERROR = OBJECT_CONSTRUCT(\n    'errorType', 'DBT',\n    'errorMessage', '@{activity('dbt job call').error.message}',\n    'relativePath', RELATIVE_PATH,\n    'tenantId', TENANT_ID,\n    'companyId', COMPANY_ID\n  ),\n  FINISHED_AT = CURRENT_TIMESTAMP()\nWHERE RELATIVE_PATH = '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}';\n",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Log Pipeline Success",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "dbt job call",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "NonQuery",
+									"text": {
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'SUCCESS', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Pipeline completed successfully');",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"relative_path": {
+						"type": "string"
+					},
+					"tenant_id": {
+						"type": "string"
+					},
+					"company_id": {
+						"type": "string"
+					},
+					"file_name": {
+						"type": "string"
+					},
+					"sub_path": {
+						"type": "string"
+					},
+					"ResolvedTenantID": {
+						"type": "string"
+					}
+				},
+				"variables": {
+					"ResolvedTenantID": {
+						"type": "String"
+					},
+					"ResolvedCompanyID": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-08-27T13:01:05Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_tenant1Sink')]",
+				"[concat(variables('factoryId'), '/linkedServices/SnowflakeCN')]",
+				"[concat(variables('factoryId'), '/datasets/SnowflakeLookup')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/Snowflake')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -668,6 +1276,262 @@
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/DS_ClientSource')]",
 				"[concat(variables('factoryId'), '/datasets/DS_tenant1Sink')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Snowflake_test')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Copy data1",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "Set variable1",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "BinarySource",
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"deleteFilesAfterCompletion": false
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							},
+							"sink": {
+								"type": "BinarySink",
+								"storeSettings": {
+									"type": "AzureBlobStorageWriteSettings",
+									"maxConcurrentConnections": 1,
+									"copyBehavior": "PreserveHierarchy"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "DS_ClientSource",
+								"type": "DatasetReference",
+								"parameters": {
+									"containerName": {
+										"value": "@pipeline().parameters.containerName",
+										"type": "Expression"
+									},
+									"folderPath": {
+										"value": "@pipeline().parameters.companyId",
+										"type": "Expression"
+									},
+									"fileName": {
+										"value": "@pipeline().parameters.fileName",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "DS_tenant1Sink",
+								"type": "DatasetReference",
+								"parameters": {
+									"companyFolder": "@pipeline().parameters.folderPath",
+									"fileName": {
+										"value": "@variables('TimestampFileName')",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "Log Pipeline Start",
+						"type": "Script",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "NonQuery",
+									"text": {
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, START_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'STARTED', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Snowflake pipeline execution started');",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Set variable1",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "Log Pipeline Start",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "TimestampFileName",
+							"value": {
+								"value": "@concat(\n  substring(pipeline().parameters.fileName, 0, lastIndexOf(pipeline().parameters.fileName, '.')),\n  '_',\n  formatDateTime(utcNow(), 'yyyyMMddHHmmss'),\n  '.',\n  last(array(split(pipeline().parameters.fileName, '.')))\n)\n",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Log Copy Error",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Copy data1",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "NonQuery",
+									"text": {
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Copy activity failed', '@{activity('Copy data1').error.message}');",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Log Pipeline Success",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Copy data1",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "NonQuery",
+									"text": {
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'SUCCESS', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Snowflake pipeline completed successfully');",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"tenantId": {
+						"type": "string"
+					},
+					"containerName": {
+						"type": "string"
+					},
+					"relativePath": {
+						"type": "string"
+					},
+					"fileName": {
+						"type": "string"
+					},
+					"folderPath": {
+						"type": "string"
+					},
+					"companyId": {
+						"type": "string"
+					}
+				},
+				"variables": {
+					"Tenant": {
+						"type": "String"
+					},
+					"Container": {
+						"type": "String"
+					},
+					"RelativePath": {
+						"type": "String"
+					},
+					"FileName": {
+						"type": "String"
+					},
+					"TimestampFileName": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-08-25T07:48:42Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_ClientSource')]",
+				"[concat(variables('factoryId'), '/datasets/DS_tenant1Sink')]",
+				"[concat(variables('factoryId'), '/linkedServices/SnowflakeCN')]"
 			]
 		},
 		{
@@ -846,7 +1710,7 @@
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"annotations": [],
-				"runtimeState": "Started",
+				"runtimeState": "Stopped",
 				"pipelines": [
 					{
 						"pipelineReference": {
@@ -878,12 +1742,49 @@
 			]
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/TriggerSnowflake')]",
+			"name": "[concat(parameters('factoryName'), '/TriggerCentral_test')]",
 			"type": "Microsoft.DataFactory/factories/triggers",
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"annotations": [],
 				"runtimeState": "Started",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "Ingest_test",
+							"type": "PipelineReference"
+						},
+						"parameters": {
+							"relative_path": "[parameters('TriggerCentral_test_properties_Ingest_test_parameters_relative_path')]",
+							"tenant_id": "[parameters('TriggerCentral_test_properties_Ingest_test_parameters_tenant_id')]",
+							"company_id": "[parameters('TriggerCentral_test_properties_Ingest_test_parameters_company_id')]",
+							"file_name": "[parameters('TriggerCentral_test_properties_Ingest_test_parameters_file_name')]",
+							"sub_path": "[parameters('TriggerCentral_test_properties_Ingest_test_parameters_sub_path')]"
+						}
+					}
+				],
+				"type": "BlobEventsTrigger",
+				"typeProperties": {
+					"blobPathBeginsWith": "/central/blobs/",
+					"blobPathEndsWith": ".mdb",
+					"ignoreEmptyBlobs": true,
+					"scope": "[parameters('TriggerCentral_test_properties_typeProperties_scope')]",
+					"events": [
+						"Microsoft.Storage.BlobCreated"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/Ingest_test')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/TriggerSnowflake')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Stopped",
 				"pipelines": [
 					{
 						"pipelineReference": {
@@ -912,6 +1813,43 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/pipelines/Snowflake')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/TriggerSnowflake_test')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Started",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "Snowflake_test",
+							"type": "PipelineReference"
+						},
+						"parameters": {
+							"tenantId": "[parameters('TriggerSnowflake_test_properties_Snowflake_test_parameters_tenantId')]",
+							"containerName": "[parameters('TriggerSnowflake_test_properties_Snowflake_test_parameters_containerName')]",
+							"relativePath": "[parameters('TriggerSnowflake_test_properties_Snowflake_test_parameters_relativePath')]",
+							"fileName": "[parameters('TriggerSnowflake_test_properties_Snowflake_test_parameters_fileName')]",
+							"folderPath": "[parameters('TriggerSnowflake_test_properties_Snowflake_test_parameters_folderPath')]",
+							"companyId": "[parameters('TriggerSnowflake_test_properties_Snowflake_test_parameters_companyId')]"
+						}
+					}
+				],
+				"type": "BlobEventsTrigger",
+				"typeProperties": {
+					"blobPathEndsWith": ".mdb",
+					"ignoreEmptyBlobs": true,
+					"scope": "[parameters('TriggerSnowflake_test_properties_typeProperties_scope')]",
+					"events": [
+						"Microsoft.Storage.BlobCreated"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/Snowflake_test')]"
 			]
 		}
 	]

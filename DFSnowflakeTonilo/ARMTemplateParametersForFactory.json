@@ -35,6 +35,24 @@
 		"TriggerCentral_properties_typeProperties_scope": {
 			"value": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/ingestiontonilo"
 		},
+		"TriggerCentral_test_properties_Ingest_test_parameters_relative_path": {
+			"value": "@triggerBody().folderPath"
+		},
+		"TriggerCentral_test_properties_Ingest_test_parameters_tenant_id": {
+			"value": "@split(triggerBody().folderPath,'/')[1]"
+		},
+		"TriggerCentral_test_properties_Ingest_test_parameters_company_id": {
+			"value": "@split(triggerBody().folderPath,'/')[2]"
+		},
+		"TriggerCentral_test_properties_Ingest_test_parameters_file_name": {
+			"value": "@triggerBody().fileName"
+		},
+		"TriggerCentral_test_properties_Ingest_test_parameters_sub_path": {
+			"value": "@concat(split(triggerBody().folderPath,'/')[1], '/', split(triggerBody().folderPath,'/')[2])\n"
+		},
+		"TriggerCentral_test_properties_typeProperties_scope": {
+			"value": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/ingestiontonilo"
+		},
 		"TriggerSnowflake_properties_Snowflake_parameters_tenantId": {
 			"value": "@split(triggerBody().folderPath,'/')[0]"
 		},
@@ -54,6 +72,27 @@
 			"value": "@split(triggerBody().folderPath,'/')[1]"
 		},
 		"TriggerSnowflake_properties_typeProperties_scope": {
+			"value": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/tonilosnowflk"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_tenantId": {
+			"value": "@split(triggerBody().folderPath,'/')[0]"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_containerName": {
+			"value": "@split(triggerBody().folderPath,'/')[0]"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_relativePath": {
+			"value": "@concat(triggerBody().folderPath,'/',triggerBody().fileName)"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_fileName": {
+			"value": "@triggerBody().fileName"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_folderPath": {
+			"value": "@triggerBody().folderPath"
+		},
+		"TriggerSnowflake_test_properties_Snowflake_test_parameters_companyId": {
+			"value": "@split(triggerBody().folderPath,'/')[1]"
+		},
+		"TriggerSnowflake_test_properties_typeProperties_scope": {
 			"value": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/tonilosnowflk"
 		}
 	}
