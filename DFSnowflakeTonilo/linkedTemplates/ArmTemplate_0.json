@@ -1817,7 +1817,7 @@
 										"type": "Expression"
 									},
 									"folderPath": {
-										"value": "@pipeline().parameters.companyId",
+										"value": "@if(contains(pipeline().parameters.folderPath, '/'), replace(pipeline().parameters.folderPath, concat(pipeline().parameters.tenantId, '/'), ''), '')",
 										"type": "Expression"
 									},
 									"fileName": {
@@ -1832,7 +1832,7 @@
 								"referenceName": "DS_tenant1Sink",
 								"type": "DatasetReference",
 								"parameters": {
-									"companyFolder": "@pipeline().parameters.folderPath",
+									"companyFolder": "@concat(pipeline().parameters.tenantId, '/', pipeline().parameters.companyId)",
 									"fileName": {
 										"value": "@variables('TimestampFileName')",
 										"type": "Expression"
