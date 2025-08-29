@@ -974,7 +974,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, START_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'STARTED', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Pipeline execution started');",
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, START_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nSELECT\nUUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'STARTED', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Pipeline execution started'",
 										"type": "Expression"
 									}
 								}
@@ -1380,7 +1380,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, START_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'STARTED', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Snowflake pipeline execution started');",
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, START_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nSELECT\nUUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'STARTED', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Snowflake pipeline execution started'",
 										"type": "Expression"
 									}
 								}
