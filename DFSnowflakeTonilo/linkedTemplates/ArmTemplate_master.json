@@ -1,0 +1,161 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "DFSnowflakeTonilo"
+		},
+		"AzureBlobStorage1_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'AzureBlobStorage1'"
+		},
+		"LS_Storage_Account_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'LS_Storage_Account'"
+		},
+		"SnowflakeCN_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'SnowflakeCN'"
+		},
+		"SnowflakeCN_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "JAVATEST"
+		},
+		"TriggerCentral_properties_Ingest_parameters_relative_path": {
+			"type": "string",
+			"defaultValue": "@triggerBody().folderPath"
+		},
+		"TriggerCentral_properties_Ingest_parameters_tenant_id": {
+			"type": "string",
+			"defaultValue": "@split(triggerBody().folderPath,'/')[1]"
+		},
+		"TriggerCentral_properties_Ingest_parameters_company_id": {
+			"type": "string",
+			"defaultValue": "@split(triggerBody().folderPath,'/')[2]"
+		},
+		"TriggerCentral_properties_Ingest_parameters_file_name": {
+			"type": "string",
+			"defaultValue": "@triggerBody().fileName"
+		},
+		"TriggerCentral_properties_Ingest_parameters_sub_path": {
+			"type": "string",
+			"defaultValue": "@concat(split(triggerBody().folderPath,'/')[1], '/', split(triggerBody().folderPath,'/')[2])\n"
+		},
+		"TriggerCentral_properties_typeProperties_scope": {
+			"type": "string",
+			"defaultValue": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/ingestiontonilo"
+		},
+		"TriggerSnowflake_properties_Snowflake_parameters_tenantId": {
+			"type": "string",
+			"defaultValue": "@split(triggerBody().folderPath,'/')[0]"
+		},
+		"TriggerSnowflake_properties_Snowflake_parameters_containerName": {
+			"type": "string",
+			"defaultValue": "@split(triggerBody().folderPath,'/')[0]"
+		},
+		"TriggerSnowflake_properties_Snowflake_parameters_relativePath": {
+			"type": "string",
+			"defaultValue": "@concat(triggerBody().folderPath,'/',triggerBody().fileName)"
+		},
+		"TriggerSnowflake_properties_Snowflake_parameters_fileName": {
+			"type": "string",
+			"defaultValue": "@triggerBody().fileName"
+		},
+		"TriggerSnowflake_properties_Snowflake_parameters_folderPath": {
+			"type": "string",
+			"defaultValue": "@triggerBody().folderPath"
+		},
+		"TriggerSnowflake_properties_Snowflake_parameters_companyId": {
+			"type": "string",
+			"defaultValue": "@split(triggerBody().folderPath,'/')[1]"
+		},
+		"TriggerSnowflake_properties_typeProperties_scope": {
+			"type": "string",
+			"defaultValue": "/subscriptions/e1a1b127-0ee4-4c2d-b2f1-3ab84c1cafad/resourceGroups/RGTonilo/providers/Microsoft.Storage/storageAccounts/tonilosnowflk"
+		},
+		"containerUri": {
+			"type": "string",
+			"metadata": "URI to storage account containing linked ARM templates"
+		},
+		"containerSasToken": {
+			"type": "string",
+			"metadata": "Sas token to storage account containing linked ARM templates"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "DFSnowflakeTonilo_ArmTemplate_0",
+			"type": "Microsoft.Resources/deployments",
+			"apiVersion": "2024-03-01",
+			"properties": {
+				"mode": "incremental",
+				"templateLink": {
+					"uri": "[concat(parameters('containerUri'), '/ArmTemplate_0.json', parameters('containerSasToken'))]",
+					"contentVersion": "1.0.0.0"
+				},
+				"parameters": {
+					"factoryName": {
+						"value": "[parameters('factoryName')]"
+					},
+					"AzureBlobStorage1_connectionString": {
+						"value": "[parameters('AzureBlobStorage1_connectionString')]"
+					},
+					"LS_Storage_Account_connectionString": {
+						"value": "[parameters('LS_Storage_Account_connectionString')]"
+					},
+					"SnowflakeCN_password": {
+						"value": "[parameters('SnowflakeCN_password')]"
+					},
+					"SnowflakeCN_properties_typeProperties_database": {
+						"value": "[parameters('SnowflakeCN_properties_typeProperties_database')]"
+					},
+					"TriggerCentral_properties_Ingest_parameters_relative_path": {
+						"value": "[parameters('TriggerCentral_properties_Ingest_parameters_relative_path')]"
+					},
+					"TriggerCentral_properties_Ingest_parameters_tenant_id": {
+						"value": "[parameters('TriggerCentral_properties_Ingest_parameters_tenant_id')]"
+					},
+					"TriggerCentral_properties_Ingest_parameters_company_id": {
+						"value": "[parameters('TriggerCentral_properties_Ingest_parameters_company_id')]"
+					},
+					"TriggerCentral_properties_Ingest_parameters_file_name": {
+						"value": "[parameters('TriggerCentral_properties_Ingest_parameters_file_name')]"
+					},
+					"TriggerCentral_properties_Ingest_parameters_sub_path": {
+						"value": "[parameters('TriggerCentral_properties_Ingest_parameters_sub_path')]"
+					},
+					"TriggerCentral_properties_typeProperties_scope": {
+						"value": "[parameters('TriggerCentral_properties_typeProperties_scope')]"
+					},
+					"TriggerSnowflake_properties_Snowflake_parameters_tenantId": {
+						"value": "[parameters('TriggerSnowflake_properties_Snowflake_parameters_tenantId')]"
+					},
+					"TriggerSnowflake_properties_Snowflake_parameters_containerName": {
+						"value": "[parameters('TriggerSnowflake_properties_Snowflake_parameters_containerName')]"
+					},
+					"TriggerSnowflake_properties_Snowflake_parameters_relativePath": {
+						"value": "[parameters('TriggerSnowflake_properties_Snowflake_parameters_relativePath')]"
+					},
+					"TriggerSnowflake_properties_Snowflake_parameters_fileName": {
+						"value": "[parameters('TriggerSnowflake_properties_Snowflake_parameters_fileName')]"
+					},
+					"TriggerSnowflake_properties_Snowflake_parameters_folderPath": {
+						"value": "[parameters('TriggerSnowflake_properties_Snowflake_parameters_folderPath')]"
+					},
+					"TriggerSnowflake_properties_Snowflake_parameters_companyId": {
+						"value": "[parameters('TriggerSnowflake_properties_Snowflake_parameters_companyId')]"
+					},
+					"TriggerSnowflake_properties_typeProperties_scope": {
+						"value": "[parameters('TriggerSnowflake_properties_typeProperties_scope')]"
+					}
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}
