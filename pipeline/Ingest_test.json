@@ -98,8 +98,7 @@
 								"scriptBlockExecutionTimeout": "02:00:00"
 							}
 						}
-					],
-					"ifTrueActivities": []
+					]
 				}
 			},
 			{
@@ -185,8 +184,7 @@
 								"scriptBlockExecutionTimeout": "02:00:00"
 							}
 						}
-					],
-					"ifTrueActivities": []
+					]
 				}
 			},
 			{
@@ -317,12 +315,6 @@
 				"type": "Script",
 				"dependsOn": [
 					{
-						"activity": "Log Validation Success",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					},
-					{
 						"activity": "File Size Validation",
 						"dependencyConditions": [
 							"Succeeded"
@@ -438,14 +430,7 @@
 			{
 				"name": "Get Metadata1",
 				"type": "GetMetadata",
-				"dependsOn": [
-					{
-						"activity": "Log Structure Validation Success",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
+				"dependsOn": [],
 				"policy": {
 					"timeout": "0.12:00:00",
 					"retry": 0,
@@ -959,9 +944,6 @@
 			"sub_path": {
 				"type": "string"
 			},
-			"ResolvedTenantID": {
-				"type": "string"
-			},
 			"max_file_size_bytes": {
 				"type": "int",
 				"defaultValue": 1073741824
@@ -980,7 +962,11 @@
 			},
 			"required_mdb_tables": {
 				"type": "array",
-				"defaultValue": ["CITIES", "INVOICES", "BANKS"]
+				"defaultValue": [
+					"CITIES",
+					"INVOICES",
+					"BANKS"
+				]
 			},
 			"enable_structure_validation": {
 				"type": "bool",
