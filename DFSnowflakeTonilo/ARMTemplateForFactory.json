@@ -1010,7 +1010,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nVALUES\n(UUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Get Metadata failed', '@{activity('Get Metadata1').error.message}');",
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT\nUUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Get Metadata failed', '@{activity('Get Metadata1').error.message}'",
 										"type": "Expression"
 									}
 								}
@@ -1046,7 +1046,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nVALUES\n(UUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'DBT job failed', '@{activity('dbt job call').error.message}');\n\n-- Also update the queue table\nUPDATE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\nSET \n  STATUS = 'DLQ',\n  ERROR = OBJECT_CONSTRUCT(\n    'errorType', 'DBT',\n    'errorMessage', '@{activity('dbt job call').error.message}',\n    'relativePath', RELATIVE_PATH,\n    'tenantId', TENANT_ID,\n    'companyId', COMPANY_ID\n  ),\n  FINISHED_AT = CURRENT_TIMESTAMP()\nWHERE RELATIVE_PATH = '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}';\n",
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT\nUUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'DBT job failed', '@{activity('dbt job call').error.message}');\n\n\nUPDATE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\nSET \n  STATUS = 'DLQ',\n  ERROR = OBJECT_CONSTRUCT(\n    'errorType', 'DBT',\n    'errorMessage', '@{activity('dbt job call').error.message}',\n    'relativePath', RELATIVE_PATH,\n    'tenantId', TENANT_ID,\n    'companyId', COMPANY_ID\n  ),\n  FINISHED_AT = CURRENT_TIMESTAMP()\nWHERE RELATIVE_PATH = '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}';\n",
 										"type": "Expression"
 									}
 								}
@@ -1082,7 +1082,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'SUCCESS', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Pipeline completed successfully');",
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nSELECT\nUUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'SUCCESS', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Pipeline completed successfully'",
 										"type": "Expression"
 									}
 								}
@@ -1440,7 +1440,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Copy activity failed', '@{activity('Copy data1').error.message}');",
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT\nUUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Copy activity failed', '@{activity('Copy data1').error.message}'",
 										"type": "Expression"
 									}
 								}
@@ -1476,7 +1476,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES\n(UUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'SUCCESS', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Snowflake pipeline completed successfully');",
+										"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nSELECT\nUUID_STRING(), 'Snowflake_test', '@{pipeline().RunId}', 'SUCCESS', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenantId}', '@{pipeline().parameters.companyId}', '@{pipeline().parameters.relativePath}', 'Snowflake pipeline completed successfully'",
 										"type": "Expression"
 									}
 								}
