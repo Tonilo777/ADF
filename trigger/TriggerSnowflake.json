@@ -14,8 +14,8 @@
 					"containerName": "@split(triggerBody().folderPath,'/')[0]",
 					"relativePath": "@concat(triggerBody().folderPath,'/',triggerBody().fileName)",
 					"fileName": "@triggerBody().fileName",
-					"folderPath": "@triggerBody().folderPath",
-					"companyId": "@split(triggerBody().folderPath,'/')[1]"
+					"folderPath": "@if(greater(length(split(triggerBody().folderPath,'/')), 1), triggerBody().folderPath, split(triggerBody().folderPath,'/')[0])",
+					"companyId": "@if(greater(length(split(triggerBody().folderPath,'/')), 1), split(triggerBody().folderPath,'/')[1], split(triggerBody().folderPath,'/')[0])"
 				}
 			}
 		],
