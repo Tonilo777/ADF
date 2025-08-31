@@ -70,7 +70,7 @@
 					},
 					"ifFalseActivities": [
 						{
-							"name": "Log File Size Error",
+							"name": "Log File Size Error and Mark Failed",
 							"type": "Script",
 							"dependsOn": [],
 							"policy": {
@@ -90,7 +90,7 @@
 									{
 										"type": "NonQuery",
 										"text": {
-											"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'File size validation failed',\n  OBJECT_CONSTRUCT('validationStatus', '@{activity('File Size Validation').Status}', 'maxAllowed', @{pipeline().parameters.max_file_size_bytes});",
+											"value": "-- Log the validation error\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'File size validation failed - pipeline terminated',\n  OBJECT_CONSTRUCT('validationStatus', '@{activity('File Size Validation').Status}', 'maxAllowed', @{pipeline().parameters.max_file_size_bytes});\n\n-- Mark file as failed in queue\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, ERROR, FINISHED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  0,\n  CURRENT_TIMESTAMP(),\n  'FAILED_VALIDATION',\n  0,\n  CURRENT_TIMESTAMP(),\n  OBJECT_CONSTRUCT('errorType', 'FILE_SIZE_VALIDATION', 'errorMessage', 'File size validation failed'),\n  CURRENT_TIMESTAMP(),\n  COALESCE(TRY_CAST('@{variables('ResolvedTenantID')}' AS NUMBER), 0),\n  COALESCE(TRY_CAST('@{variables('ResolvedCompanyID')}' AS NUMBER), 0),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}';",
 											"type": "Expression"
 										}
 									}
@@ -98,7 +98,8 @@
 								"scriptBlockExecutionTimeout": "02:00:00"
 							}
 						}
-					]
+					],
+					"ifTrueActivities": []
 				}
 			},
 			{
@@ -109,6 +110,12 @@
 						"activity": "File Size Validation Check",
 						"dependencyConditions": [
 							"Succeeded"
+						]
+					},
+					{
+						"activity": "Resolve CompanyID",
+						"dependencyConditions": [
+							"Completed"
 						]
 					}
 				],
@@ -156,7 +163,7 @@
 					},
 					"ifFalseActivities": [
 						{
-							"name": "Log Duplicate File Error",
+							"name": "Log Duplicate File Error and Mark Failed",
 							"type": "Script",
 							"dependsOn": [],
 							"policy": {
@@ -176,7 +183,7 @@
 									{
 										"type": "NonQuery",
 										"text": {
-											"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'Duplicate file detected',\n  OBJECT_CONSTRUCT('duplicateCount', '@{activity('Duplicate File Check').output.firstRow.DUPLICATE_COUNT}');",
+											"value": "-- Log the validation error\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'Duplicate file detected - pipeline terminated',\n  OBJECT_CONSTRUCT('duplicateCount', '@{activity('Duplicate File Check').output.firstRow.DUPLICATE_COUNT}');\n\n-- Mark file as duplicate/failed in queue\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, ERROR, FINISHED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  0,\n  CURRENT_TIMESTAMP(),\n  'DUPLICATE',\n  0,\n  CURRENT_TIMESTAMP(),\n  OBJECT_CONSTRUCT('errorType', 'DUPLICATE_FILE', 'errorMessage', 'Duplicate file detected', 'duplicateCount', @{activity('Duplicate File Check').output.firstRow.DUPLICATE_COUNT}),\n  CURRENT_TIMESTAMP(),\n  COALESCE(TRY_CAST('@{variables('ResolvedTenantID')}' AS NUMBER), 0),\n  COALESCE(TRY_CAST('@{variables('ResolvedCompanyID')}' AS NUMBER), 0),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}';",
 											"type": "Expression"
 										}
 									}
@@ -184,7 +191,8 @@
 								"scriptBlockExecutionTimeout": "02:00:00"
 							}
 						}
-					]
+					],
+					"ifTrueActivities": []
 				}
 			},
 			{
@@ -198,9 +206,9 @@
 						]
 					},
 					{
-						"activity": "File Size Validation",
+						"activity": "Resolve CompanyID",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -268,7 +276,7 @@
 									{
 										"type": "NonQuery",
 										"text": {
-											"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'Business rules validation failed',\n  OBJECT_CONSTRUCT('validationResult', '@{activity('Business Rules Validation').output.resultSets[0].rows[0][0]}');",
+											"value": "-- Log the validation error\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'Business rules validation failed - pipeline terminated',\n  OBJECT_CONSTRUCT('validationResult', '@{activity('Business Rules Validation').output.resultSets[0].rows[0][0]}');\n\n-- Mark file as failed in queue\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, ERROR, FINISHED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  0,\n  CURRENT_TIMESTAMP(),\n  'FAILED_VALIDATION',\n  0,\n  CURRENT_TIMESTAMP(),\n  OBJECT_CONSTRUCT('errorType', 'BUSINESS_RULES', 'errorMessage', 'Business rules validation failed', 'validationResult', '@{activity('Business Rules Validation').output.resultSets[0].rows[0][0]}'),\n  CURRENT_TIMESTAMP(),\n  COALESCE(TRY_CAST('@{variables('ResolvedTenantID')}' AS NUMBER), 0),\n  COALESCE(TRY_CAST('@{variables('ResolvedCompanyID')}' AS NUMBER), 0),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}';",
 											"type": "Expression"
 										}
 									}
@@ -365,6 +373,12 @@
 				"dependsOn": [
 					{
 						"activity": "Get Metadata1",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "Resolve CompanyID",
 						"dependencyConditions": [
 							"Completed"
 						]
