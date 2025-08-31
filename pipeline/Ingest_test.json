@@ -98,8 +98,7 @@
 								"scriptBlockExecutionTimeout": "02:00:00"
 							}
 						}
-					],
-					"ifTrueActivities": []
+					]
 				}
 			},
 			{
@@ -185,8 +184,7 @@
 								"scriptBlockExecutionTimeout": "02:00:00"
 							}
 						}
-					],
-					"ifTrueActivities": []
+					]
 				}
 			},
 			{
@@ -836,9 +834,6 @@
 			"sub_path": {
 				"type": "string"
 			},
-			"ResolvedTenantID": {
-				"type": "string"
-			},
 			"max_file_size_bytes": {
 				"type": "int",
 				"defaultValue": 1073741824
@@ -854,7 +849,7 @@
 			"enable_business_rules_validation": {
 				"type": "bool",
 				"defaultValue": true
-			},
+			}
 		},
 		"variables": {
 			"ResolvedTenantID": {
