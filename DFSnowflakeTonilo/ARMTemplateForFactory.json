@@ -967,7 +967,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "-- Update status to PROCESSING before calling stored procedure\nUPDATE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\nSET STATUS = 'PROCESSING', \n    ATTEMPTS = ATTEMPTS + 1\nWHERE RELATIVE_PATH = '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}'\n  AND STATUS = 'QUEUED';",
+										"value": "CALL JAVATEST.JAVATEST1.PROC_INGEST_NEXT_MDB2()",
 										"type": "Expression"
 									}
 								},
@@ -1326,7 +1326,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "-- Log success and update queue status to COMPLETED\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES (\n  UUID_STRING(), \n  'Ingest_test', \n  '@{pipeline().RunId}', \n  'SUCCESS', \n  CURRENT_TIMESTAMP(), \n  '@{pipeline().parameters.tenant_id}', \n  '@{pipeline().parameters.company_id}', \n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', \n  'Pipeline completed successfully'\n);\n\n-- Update queue status to COMPLETED\nUPDATE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\nSET STATUS = 'COMPLETED',\n    FINISHED_AT = CURRENT_TIMESTAMP()\nWHERE RELATIVE_PATH = '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}'\n  AND STATUS = 'PROCESSING';",
+										"value": "-- Log success and update queue status to COMPLETED\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nSELECT\n  UUID_STRING(), \n  'Ingest_test', \n  '@{pipeline().RunId}', \n  'SUCCESS', \n  CURRENT_TIMESTAMP(), \n  '@{pipeline().parameters.tenant_id}', \n  '@{pipeline().parameters.company_id}', \n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', \n  'Pipeline completed successfully'\n\n\n-- Update queue status to COMPLETED\nUPDATE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\nSET STATUS = 'COMPLETED',\n    FINISHED_AT = CURRENT_TIMESTAMP()\nWHERE RELATIVE_PATH = '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}'\n  AND STATUS = 'PROCESSING';",
 										"type": "Expression"
 									}
 								}
