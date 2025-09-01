@@ -756,9 +756,9 @@
 						"type": "GetMetadata",
 						"dependsOn": [
 							{
-								"activity": "Set Resolved Company ID",
+								"activity": "Resolve CompanyID",
 								"dependencyConditions": [
-									"Succeeded"
+									"Completed"
 								]
 							}
 						],
@@ -862,9 +862,9 @@
 								]
 							},
 							{
-								"activity": "Set Resolved Company ID",
+								"activity": "Resolve CompanyID",
 								"dependencyConditions": [
-									"Succeeded"
+									"Completed"
 								]
 							}
 						],
@@ -955,9 +955,9 @@
 								]
 							},
 							{
-								"activity": "Set Resolved Company ID",
+								"activity": "Resolve CompanyID",
 								"dependencyConditions": [
-									"Succeeded"
+									"Completed"
 								]
 							}
 						],
@@ -1078,9 +1078,9 @@
 								]
 							},
 							{
-								"activity": "Set Resolved Company ID",
+								"activity": "Resolve CompanyID",
 								"dependencyConditions": [
-									"Succeeded"
+									"Completed"
 								]
 							}
 						],
@@ -1214,7 +1214,7 @@
 						"dependsOn": [],
 						"policy": {
 							"timeout": "0.12:00:00",
-							"retry": 2,
+							"retry": 0,
 							"retryIntervalInSeconds": 30,
 							"secureOutput": false,
 							"secureInput": false
@@ -1229,7 +1229,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_TENANT AS tgt\nUSING (\n    SELECT\n        '@{pipeline().parameters.tenant_id}' AS TENANT_NAME\n) AS src\nON tgt.tenant_name = src.tenant_name\nWHEN MATCHED THEN\n    UPDATE SET tenant_name = src.tenant_name   -- optional, usually no-op\nWHEN NOT MATCHED THEN\n    INSERT (tenant_name, created_at)\n    VALUES (src.tenant_name, CURRENT_TIMESTAMP);\n",
+										"value": "MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_TENANT AS tgt\nUSING (\n    SELECT\n        '@{pipeline().parameters.tenant_id}' AS TENANT_NAME\n) AS src\nON tgt.tenant_name = src.tenant_name\nWHEN MATCHED THEN\n    UPDATE SET tenant_name = src.tenant_name   -- optional, usually no-op\nWHEN NOT MATCHED THEN\n    INSERT (tenant_name, created_at)\n    VALUES (src.tenant_name, CURRENT_TIMESTAMP());",
 										"type": "Expression"
 									}
 								}
@@ -1238,19 +1238,80 @@
 						}
 					},
 					{
-						"name": "Call Identity Resolution",
-						"type": "Script",
+						"name": "LookupTenant",
+						"type": "Lookup",
 						"dependsOn": [
 							{
-								"activity": "LookupTenant",
+								"activity": "Tenant merge",
 								"dependencyConditions": [
-									"Succeeded"
+									"Completed"
 								]
 							}
 						],
 						"policy": {
 							"timeout": "0.12:00:00",
-							"retry": 2,
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "SnowflakeV2Source",
+								"query": {
+									"value": "SELECT tenant_ID \nFROM javatest.tonilo_warehouse.dim_tenant \nWHERE tenant_name = '@{pipeline().parameters.tenant_id}'\n",
+									"type": "Expression"
+								},
+								"exportSettings": {
+									"type": "SnowflakeExportCopyCommand"
+								}
+							},
+							"dataset": {
+								"referenceName": "SnowflakeLookup",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "Resolve tenantID",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "LookupTenant",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "ResolvedTenantID",
+							"value": {
+								"value": "@string(activity('LookupTenant').output.firstRow.TENANT_ID)\n",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Company merge",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Resolve tenantID",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
 							"retryIntervalInSeconds": 30,
 							"secureOutput": false,
 							"secureInput": false
@@ -1263,9 +1324,9 @@
 						"typeProperties": {
 							"scripts": [
 								{
-									"type": "Query",
+									"type": "NonQuery",
 									"text": {
-										"value": "CALL RESOLVE_TENANT_COMPANY_IDS('@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}');",
+										"value": "MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_COMPANY AS tgt\nUSING (\n    SELECT\n        @{variables('ResolvedTenantID')}      AS TENANT_ID,\n        '@{pipeline().parameters.company_id}' AS COMPANY_NAME\n) AS src\nON  tgt.tenant_id    = src.tenant_id\nAND tgt.company_name = src.company_name\n\nWHEN MATCHED THEN\n    UPDATE SET company_name = src.company_name   -- optional, usually no-op\n\nWHEN NOT MATCHED THEN\n    INSERT (tenant_id, company_name, created_at)\n    VALUES (src.tenant_id, src.company_name, CURRENT_TIMESTAMP());",
 										"type": "Expression"
 									}
 								}
@@ -1274,37 +1335,51 @@
 						}
 					},
 					{
-						"name": "Set Resolved Variables",
-						"type": "SetVariable",
+						"name": "LookupCompany",
+						"description": "",
+						"type": "Lookup",
 						"dependsOn": [
 							{
-								"activity": "Call Identity Resolution",
+								"activity": "Company merge",
 								"dependencyConditions": [
-									"Succeeded"
+									"Completed"
 								]
 							}
 						],
 						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
 							"secureOutput": false,
 							"secureInput": false
 						},
 						"userProperties": [],
 						"typeProperties": {
-							"variableName": "ResolvedTenantID",
-							"value": {
-								"value": "@string(activity('Call Identity Resolution').output.resultSets[0].rows[0].RESOLVED_TENANT_ID)",
-								"type": "Expression"
+							"source": {
+								"type": "SnowflakeV2Source",
+								"query": {
+									"value": "SELECT company_ID\nFROM javatest.tonilo_warehouse.dim_company\nWHERE tenant_ID = '@{variables('ResolvedTenantID')}'\n  AND company_name = '@{pipeline().parameters.company_id}'\n",
+									"type": "Expression"
+								},
+								"exportSettings": {
+									"type": "SnowflakeExportCopyCommand"
+								}
+							},
+							"dataset": {
+								"referenceName": "SnowflakeLookup",
+								"type": "DatasetReference",
+								"parameters": {}
 							}
 						}
 					},
 					{
-						"name": "Set Resolved Company ID",
+						"name": "Resolve CompanyID",
 						"type": "SetVariable",
 						"dependsOn": [
 							{
-								"activity": "Set Resolved Variables",
+								"activity": "LookupCompany",
 								"dependencyConditions": [
-									"Succeeded"
+									"Completed"
 								]
 							}
 						],
@@ -1316,7 +1391,7 @@
 						"typeProperties": {
 							"variableName": "ResolvedCompanyID",
 							"value": {
-								"value": "@string(activity('Call Identity Resolution').output.resultSets[0].rows[0].RESOLVED_COMPANY_ID)",
+								"value": "@string(activity('LookupCompany').output.firstRow.COMPANY_ID)\n",
 								"type": "Expression"
 							}
 						}
@@ -1326,9 +1401,9 @@
 						"type": "Script",
 						"dependsOn": [
 							{
-								"activity": "Set Resolved Company ID",
+								"activity": "Resolve CompanyID",
 								"dependencyConditions": [
-									"Succeeded"
+									"Completed"
 								]
 							}
 						],
@@ -1427,43 +1502,6 @@
 								}
 							],
 							"scriptBlockExecutionTimeout": "02:00:00"
-						}
-					},
-					{
-						"name": "LookupTenant",
-						"type": "Lookup",
-						"dependsOn": [
-							{
-								"activity": "Tenant merge",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "SnowflakeV2Source",
-								"query": {
-									"value": "SELECT tenant_ID \nFROM javatest.tonilo_warehouse.dim_tenant \nWHERE tenant_name = '@{pipeline().parameters.tenant_id}'\n",
-									"type": "Expression"
-								},
-								"exportSettings": {
-									"type": "SnowflakeExportCopyCommand"
-								}
-							},
-							"dataset": {
-								"referenceName": "SnowflakeLookup",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
 						}
 					}
 				],
