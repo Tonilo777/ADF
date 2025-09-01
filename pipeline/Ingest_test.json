@@ -7,9 +7,9 @@
 				"type": "GetMetadata",
 				"dependsOn": [
 					{
-						"activity": "Set Resolved Company ID",
+						"activity": "Resolve CompanyID",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -114,9 +114,9 @@
 						]
 					},
 					{
-						"activity": "Set Resolved Company ID",
+						"activity": "Resolve CompanyID",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -132,7 +132,7 @@
 					"source": {
 						"type": "SnowflakeV2Source",
 						"query": {
-							"value": "-- Content-based duplicate detection with fallback logic\nSELECT \n  COUNT(*) as duplicate_count,\n  MAX(RELATIVE_PATH) as existing_file_path,\n  MAX(ENQUEUED_AT) as last_processed\nFROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE \nWHERE (\n    -- Primary: MD5-based detection (most accurate)\n    (MD5 IS NOT NULL \n     AND '@{activity('File Size Validation').output.contentMD5}' IS NOT NULL \n     AND MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    )\n    OR\n    -- Fallback: Size + last modified + tenant/company (when MD5 unavailable)\n    (MD5 IS NULL \n     AND SIZE_BYTES = @{activity('File Size Validation').output.size}\n     AND ABS(DATEDIFF('second', LAST_MODIFIED, TO_TIMESTAMP_NTZ('@{activity('File Size Validation').output.lastModified}'))) <= 60\n    )\n  )\n  AND TENANT_ID = @{variables('ResolvedTenantID')}\n  AND COMPANY_ID = @{variables('ResolvedCompanyID')}\n  AND STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n  AND ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\nFOR UPDATE;",
+							"value": "-- Content-based duplicate detection with fallback logic\nSELECT \n  COUNT(*) as duplicate_count,\n  MAX(RELATIVE_PATH) as existing_file_path,\n  MAX(ENQUEUED_AT) as last_processed\nFROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE \nWHERE (\n    -- Primary: MD5-based detection (most accurate)\n    (CONTENT_MD5 IS NOT NULL \n     AND '@{activity('File Size Validation').output.contentMD5}' IS NOT NULL \n     AND CONTENT_MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    )\n    OR\n    -- Fallback: Size + last modified + tenant/company (when MD5 unavailable)\n    (CONTENT_MD5 IS NULL \n     AND SIZE_BYTES = @{activity('File Size Validation').output.size}\n     AND ABS(DATEDIFF('second', LAST_MODIFIED, TO_TIMESTAMP_NTZ('@{activity('File Size Validation').output.lastModified}'))) <= 60\n    )\n  )\n  AND TENANT_ID = @{variables('ResolvedTenantID')}\n  AND COMPANY_ID = @{variables('ResolvedCompanyID')}\n  AND STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n  AND ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\nFOR UPDATE;",
 							"type": "Expression"
 						},
 						"exportSettings": {
@@ -207,9 +207,9 @@
 						]
 					},
 					{
-						"activity": "Set Resolved Company ID",
+						"activity": "Resolve CompanyID",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -330,9 +330,9 @@
 						]
 					},
 					{
-						"activity": "Set Resolved Company ID",
+						"activity": "Resolve CompanyID",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -353,7 +353,7 @@
 						{
 							"type": "NonQuery",
 							"text": {
-								"value": "-- Atomic insert with content-based duplicate prevention using existing MD5 column\n-- Insert only if content (MD5 + size + tenant/company) doesn't already exist\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME, MD5)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  COALESCE(TRY_CAST('@{if(contains(string(activity('File Size Validation').output), 'size'), activity('File Size Validation').output.size, '0')}' AS NUMBER), 0),\n  COALESCE(TO_TIMESTAMP_NTZ('@{if(contains(string(activity('File Size Validation').output), 'lastModified'), activity('File Size Validation').output.lastModified, '')}'), CURRENT_TIMESTAMP()),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},       \n  @{variables('ResolvedCompanyID')},      \n  '@{pipeline().parameters.tenant_id}',   \n  '@{pipeline().parameters.company_id}',\n  '@{activity('File Size Validation').output.contentMD5}'\nWHERE NOT EXISTS (\n  SELECT 1 FROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE existing\n  WHERE existing.MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    AND existing.SIZE_BYTES = @{activity('File Size Validation').output.size}\n    AND existing.TENANT_ID = @{variables('ResolvedTenantID')}\n    AND existing.COMPANY_ID = @{variables('ResolvedCompanyID')}\n    AND existing.STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n    AND existing.ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\n);\n",
+								"value": "-- Atomic insert with content-based duplicate prevention\n-- First, add CONTENT_MD5 column if it doesn't exist (safe to run multiple times)\nALTER TABLE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE ADD COLUMN IF NOT EXISTS CONTENT_MD5 STRING;\n\n-- Insert only if content (MD5 + size + tenant/company) doesn't already exist\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME, CONTENT_MD5)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  COALESCE(TRY_CAST('@{if(contains(string(activity('File Size Validation').output), 'size'), activity('File Size Validation').output.size, '0')}' AS NUMBER), 0),\n  COALESCE(TO_TIMESTAMP_NTZ('@{if(contains(string(activity('File Size Validation').output), 'lastModified'), activity('File Size Validation').output.lastModified, '')}'), CURRENT_TIMESTAMP()),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},       \n  @{variables('ResolvedCompanyID')},      \n  '@{pipeline().parameters.tenant_id}',   \n  '@{pipeline().parameters.company_id}',\n  '@{activity('File Size Validation').output.contentMD5}'\nWHERE NOT EXISTS (\n  SELECT 1 FROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE existing\n  WHERE existing.CONTENT_MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    AND existing.SIZE_BYTES = @{activity('File Size Validation').output.size}\n    AND existing.TENANT_ID = @{variables('ResolvedTenantID')}\n    AND existing.COMPANY_ID = @{variables('ResolvedCompanyID')}\n    AND existing.STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n    AND existing.ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\n);\n",
 								"type": "Expression"
 							}
 						}
@@ -461,12 +461,92 @@
 				}
 			},
 			{
-				"name": "Atomic Identity Resolution",
-				"type": "Script",
-				"dependsOn": [],
+				"name": "LookupTenant",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Tenant merge",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "0.12:00:00",
-					"retry": 2,
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "SELECT tenant_ID \nFROM javatest.tonilo_warehouse.dim_tenant \nWHERE tenant_name = '@{pipeline().parameters.tenant_id}'\n",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "SnowflakeLookup",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "LookupCompany",
+				"description": "",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Company merge",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "SELECT company_ID\nFROM javatest.tonilo_warehouse.dim_company\nWHERE tenant_ID = '@{variables('ResolvedTenantID')}'\n  AND company_name = '@{pipeline().parameters.company_id}'\n",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "SnowflakeLookup",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "Tenant merge",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Log Pipeline Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
 					"retryIntervalInSeconds": 30,
 					"secureOutput": false,
 					"secureInput": false
@@ -481,7 +561,7 @@
 						{
 							"type": "NonQuery",
 							"text": {
-								"value": "-- Create atomic identity resolution stored procedure (idempotent)\nCREATE OR REPLACE PROCEDURE RESOLVE_TENANT_COMPANY_IDS(\n  TENANT_NAME STRING,\n  COMPANY_NAME STRING\n)\nRETURNS TABLE(RESOLVED_TENANT_ID NUMBER, RESOLVED_COMPANY_ID NUMBER)\nLANGUAGE SQL\nAS\nBEGIN\n  -- Atomic transaction for identity resolution\n  \n  -- Upsert tenant\n  MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_TENANT AS tgt\n  USING (SELECT TENANT_NAME AS tenant_name) AS src\n  ON tgt.tenant_name = src.tenant_name\n  WHEN NOT MATCHED THEN\n      INSERT (tenant_name, created_at) VALUES (src.tenant_name, CURRENT_TIMESTAMP());\n\n  -- Get tenant ID\n  LET resolved_tenant_id := (\n    SELECT tenant_id FROM JAVATEST.TONILO_WAREHOUSE.DIM_TENANT \n    WHERE tenant_name = TENANT_NAME\n  );\n\n  -- Upsert company\n  MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_COMPANY AS tgt\n  USING (SELECT resolved_tenant_id AS tenant_id, COMPANY_NAME AS company_name) AS src\n  ON tgt.tenant_id = src.tenant_id AND tgt.company_name = src.company_name\n  WHEN NOT MATCHED THEN\n      INSERT (tenant_id, company_name, created_at) \n      VALUES (src.tenant_id, src.company_name, CURRENT_TIMESTAMP());\n\n  -- Return both resolved IDs\n  RETURN TABLE(\n    SELECT \n      resolved_tenant_id as RESOLVED_TENANT_ID,\n      (\n        SELECT company_id \n        FROM JAVATEST.TONILO_WAREHOUSE.DIM_COMPANY\n        WHERE tenant_id = resolved_tenant_id AND company_name = COMPANY_NAME\n      ) as RESOLVED_COMPANY_ID\n  );\nEND;",
+								"value": "MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_TENANT AS tgt\nUSING (\n    SELECT\n        '@{pipeline().parameters.tenant_id}' AS TENANT_NAME\n) AS src\nON tgt.tenant_name = src.tenant_name\nWHEN MATCHED THEN\n    UPDATE SET tenant_name = src.tenant_name   -- optional, usually no-op\nWHEN NOT MATCHED THEN\n    INSERT (tenant_name, created_at)\n    VALUES (src.tenant_name, CURRENT_TIMESTAMP);\n",
 								"type": "Expression"
 							}
 						}
@@ -490,19 +570,43 @@
 				}
 			},
 			{
-				"name": "Call Identity Resolution",
+				"name": "Resolve tenantID",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "LookupTenant",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "ResolvedTenantID",
+					"value": {
+						"value": "@string(activity('LookupTenant').output.firstRow.TENANT_ID)\n",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Company merge",
 				"type": "Script",
 				"dependsOn": [
 					{
-						"activity": "Atomic Identity Resolution",
+						"activity": "Resolve tenantID",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
 				"policy": {
 					"timeout": "0.12:00:00",
-					"retry": 2,
+					"retry": 0,
 					"retryIntervalInSeconds": 30,
 					"secureOutput": false,
 					"secureInput": false
@@ -515,9 +619,9 @@
 				"typeProperties": {
 					"scripts": [
 						{
-							"type": "Query",
+							"type": "NonQuery",
 							"text": {
-								"value": "CALL RESOLVE_TENANT_COMPANY_IDS('@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}');",
+								"value": "MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_COMPANY AS tgt\nUSING (\n    SELECT\n        @{variables('ResolvedTenantID')}      AS TENANT_ID,\n        '@{pipeline().parameters.company_id}' AS COMPANY_NAME\n) AS src\nON  tgt.tenant_id    = src.tenant_id\nAND tgt.company_name = src.company_name\n\nWHEN MATCHED THEN\n    UPDATE SET company_name = src.company_name   -- optional, usually no-op\n\nWHEN NOT MATCHED THEN\n    INSERT (tenant_id, company_name, created_at)\n    VALUES (src.tenant_id, src.company_name, CURRENT_TIMESTAMP);\n",
 								"type": "Expression"
 							}
 						}
@@ -526,37 +630,13 @@
 				}
 			},
 			{
-				"name": "Set Resolved Variables",
+				"name": "Resolve CompanyID",
 				"type": "SetVariable",
 				"dependsOn": [
 					{
-						"activity": "Call Identity Resolution",
+						"activity": "LookupCompany",
 						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"variableName": "ResolvedTenantID",
-					"value": {
-						"value": "@string(activity('Call Identity Resolution').output.resultSets[0].rows[0].RESOLVED_TENANT_ID)",
-						"type": "Expression"
-					}
-				}
-			},
-			{
-				"name": "Set Resolved Company ID",
-				"type": "SetVariable",
-				"dependsOn": [
-					{
-						"activity": "Set Resolved Variables",
-						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -568,7 +648,7 @@
 				"typeProperties": {
 					"variableName": "ResolvedCompanyID",
 					"value": {
-						"value": "@string(activity('Call Identity Resolution').output.resultSets[0].rows[0].RESOLVED_COMPANY_ID)",
+						"value": "@string(activity('LookupCompany').output.firstRow.COMPANY_ID)\n",
 						"type": "Expression"
 					}
 				}
@@ -576,14 +656,7 @@
 			{
 				"name": "Log Pipeline Start",
 				"type": "Script",
-				"dependsOn": [
-					{
-						"activity": "Set Resolved Company ID",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
+				"dependsOn": [],
 				"policy": {
 					"timeout": "0.12:00:00",
 					"retry": 0,
