@@ -1072,7 +1072,7 @@
 						"type": "Script",
 						"dependsOn": [
 							{
-								"activity": "Tenant merge",
+								"activity": "LookupTenant",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -1257,6 +1257,43 @@
 								}
 							],
 							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "LookupTenant",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "Tenant merge",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "SnowflakeV2Source",
+								"query": {
+									"value": "SELECT tenant_ID \nFROM javatest.tonilo_warehouse.dim_tenant \nWHERE tenant_name = '@{pipeline().parameters.tenant_id}'\n",
+									"type": "Expression"
+								},
+								"exportSettings": {
+									"type": "SnowflakeExportCopyCommand"
+								}
+							},
+							"dataset": {
+								"referenceName": "SnowflakeLookup",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
 						}
 					}
 				],
