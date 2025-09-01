@@ -586,7 +586,7 @@
 						"type": "GetMetadata",
 						"dependsOn": [
 							{
-								"activity": "Atomic Identity Resolution",
+								"activity": "Set Resolved Company ID",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -670,7 +670,7 @@
 											{
 												"type": "NonQuery",
 												"text": {
-													"value": "-- Log the validation error\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'File size validation failed - pipeline terminated',\n  OBJECT_CONSTRUCT('validationStatus', '@{activity('File Size Validation').Status}', 'maxAllowed', @{pipeline().parameters.max_file_size_bytes});\n\n-- Mark file as failed in queue\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, ERROR, FINISHED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  0,\n  CURRENT_TIMESTAMP(),\n  'FAILED_VALIDATION',\n  0,\n  CURRENT_TIMESTAMP(),\n  OBJECT_CONSTRUCT('errorType', 'FILE_SIZE_VALIDATION', 'errorMessage', 'File size validation failed'),\n  CURRENT_TIMESTAMP(),\n  0, -- Tenant ID not available in error scenarios\n  0, -- Company ID not available in error scenarios\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}';",
+													"value": "-- Log the validation error\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'File size validation failed - pipeline terminated',\n  OBJECT_CONSTRUCT('validationStatus', '@{activity('File Size Validation').Status}', 'maxAllowed', @{pipeline().parameters.max_file_size_bytes});\n\n-- Mark file as failed in queue\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, ERROR, FINISHED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  0,\n  CURRENT_TIMESTAMP(),\n  'FAILED_VALIDATION',\n  0,\n  CURRENT_TIMESTAMP(),\n  OBJECT_CONSTRUCT('errorType', 'FILE_SIZE_VALIDATION', 'errorMessage', 'File size validation failed'),\n  CURRENT_TIMESTAMP(),\n  COALESCE(TRY_CAST('@{variables('ResolvedTenantID')}' AS NUMBER), 0),\n  COALESCE(TRY_CAST('@{variables('ResolvedCompanyID')}' AS NUMBER), 0),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}';",
 													"type": "Expression"
 												}
 											}
@@ -690,6 +690,12 @@
 								"dependencyConditions": [
 									"Succeeded"
 								]
+							},
+							{
+								"activity": "Set Resolved Company ID",
+								"dependencyConditions": [
+									"Succeeded"
+								]
 							}
 						],
 						"policy": {
@@ -704,7 +710,7 @@
 							"source": {
 								"type": "SnowflakeV2Source",
 								"query": {
-									"value": "-- Content-based duplicate detection with fallback logic\nSELECT \n  COUNT(*) as duplicate_count,\n  MAX(RELATIVE_PATH) as existing_file_path,\n  MAX(ENQUEUED_AT) as last_processed\nFROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE \nWHERE (\n    -- Primary: MD5-based detection (most accurate)\n    (MD5 IS NOT NULL \n     AND '@{activity('File Size Validation').output.contentMD5}' IS NOT NULL \n     AND MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    )\n    OR\n    -- Fallback: Size + last modified + tenant/company (when MD5 unavailable)\n    (MD5 IS NULL \n     AND SIZE_BYTES = @{activity('File Size Validation').output.size}\n     AND ABS(DATEDIFF('second', LAST_MODIFIED, TO_TIMESTAMP_NTZ('@{activity('File Size Validation').output.lastModified}'))) <= 60\n    )\n  )\n  AND TENANT_ID = @{activity('Atomic Identity Resolution').output.resultSets[0].rows[0].RESOLVED_TENANT_ID}\n  AND COMPANY_ID = @{activity('Atomic Identity Resolution').output.resultSets[0].rows[0].RESOLVED_COMPANY_ID}\n  AND STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n  AND ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\nFOR UPDATE;",
+									"value": "-- Content-based duplicate detection with fallback logic\nSELECT \n  COUNT(*) as duplicate_count,\n  MAX(RELATIVE_PATH) as existing_file_path,\n  MAX(ENQUEUED_AT) as last_processed\nFROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE \nWHERE (\n    -- Primary: MD5-based detection (most accurate)\n    (MD5 IS NOT NULL \n     AND '@{activity('File Size Validation').output.contentMD5}' IS NOT NULL \n     AND MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    )\n    OR\n    -- Fallback: Size + last modified + tenant/company (when MD5 unavailable)\n    (MD5 IS NULL \n     AND SIZE_BYTES = @{activity('File Size Validation').output.size}\n     AND ABS(DATEDIFF('second', LAST_MODIFIED, TO_TIMESTAMP_NTZ('@{activity('File Size Validation').output.lastModified}'))) <= 60\n    )\n  )\n  AND TENANT_ID = @{variables('ResolvedTenantID')}\n  AND COMPANY_ID = @{variables('ResolvedCompanyID')}\n  AND STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n  AND ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\nFOR UPDATE;",
 									"type": "Expression"
 								},
 								"exportSettings": {
@@ -777,6 +783,12 @@
 								"dependencyConditions": [
 									"Succeeded"
 								]
+							},
+							{
+								"activity": "Set Resolved Company ID",
+								"dependencyConditions": [
+									"Succeeded"
+								]
 							}
 						],
 						"policy": {
@@ -843,7 +855,7 @@
 											{
 												"type": "NonQuery",
 												"text": {
-													"value": "-- Log the validation error\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'Business rules validation failed - pipeline terminated',\n  OBJECT_CONSTRUCT('validationResult', '@{activity('Business Rules Validation').output.resultSets[0].rows[0].validation_result}');\n\n-- Mark file as failed in queue\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, ERROR, FINISHED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  0,\n  CURRENT_TIMESTAMP(),\n  'FAILED_VALIDATION',\n  0,\n  CURRENT_TIMESTAMP(),\n  OBJECT_CONSTRUCT('errorType', 'BUSINESS_RULES', 'errorMessage', 'Business rules validation failed', 'validationResult', '@{activity('Business Rules Validation').output.resultSets[0].rows[0].validation_result}'),\n  CURRENT_TIMESTAMP(),\n  0, -- Tenant ID not available in error scenarios\n  0, -- Company ID not available in error scenarios\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}';",
+													"value": "-- Log the validation error\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'Business rules validation failed - pipeline terminated',\n  OBJECT_CONSTRUCT('validationResult', '@{activity('Business Rules Validation').output.resultSets[0].rows[0].validation_result}');\n\n-- Mark file as failed in queue\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, ERROR, FINISHED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  0,\n  CURRENT_TIMESTAMP(),\n  'FAILED_VALIDATION',\n  0,\n  CURRENT_TIMESTAMP(),\n  OBJECT_CONSTRUCT('errorType', 'BUSINESS_RULES', 'errorMessage', 'Business rules validation failed', 'validationResult', '@{activity('Business Rules Validation').output.resultSets[0].rows[0].validation_result}'),\n  CURRENT_TIMESTAMP(),\n  COALESCE(TRY_CAST('@{variables('ResolvedTenantID')}' AS NUMBER), 0),\n  COALESCE(TRY_CAST('@{variables('ResolvedCompanyID')}' AS NUMBER), 0),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}';",
 													"type": "Expression"
 												}
 											}
@@ -894,6 +906,12 @@
 								"dependencyConditions": [
 									"Succeeded"
 								]
+							},
+							{
+								"activity": "Set Resolved Company ID",
+								"dependencyConditions": [
+									"Succeeded"
+								]
 							}
 						],
 						"policy": {
@@ -913,7 +931,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "-- Atomic insert with content-based duplicate prevention using existing MD5 column\n-- Insert only if content (MD5 + size + tenant/company) doesn't already exist\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME, MD5)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  COALESCE(TRY_CAST('@{if(contains(string(activity('File Size Validation').output), 'size'), activity('File Size Validation').output.size, '0')}' AS NUMBER), 0),\n  COALESCE(TO_TIMESTAMP_NTZ('@{if(contains(string(activity('File Size Validation').output), 'lastModified'), activity('File Size Validation').output.lastModified, '')}'), CURRENT_TIMESTAMP()),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{activity('Atomic Identity Resolution').output.resultSets[0].rows[0].RESOLVED_TENANT_ID},       \n  @{activity('Atomic Identity Resolution').output.resultSets[0].rows[0].RESOLVED_COMPANY_ID},      \n  '@{pipeline().parameters.tenant_id}',   \n  '@{pipeline().parameters.company_id}',\n  '@{activity('File Size Validation').output.contentMD5}'\nWHERE NOT EXISTS (\n  SELECT 1 FROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE existing\n  WHERE existing.MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    AND existing.SIZE_BYTES = @{activity('File Size Validation').output.size}\n    AND existing.TENANT_ID = @{activity('Atomic Identity Resolution').output.resultSets[0].rows[0].RESOLVED_TENANT_ID}\n    AND existing.COMPANY_ID = @{activity('Atomic Identity Resolution').output.resultSets[0].rows[0].RESOLVED_COMPANY_ID}\n    AND existing.STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n    AND existing.ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\n);\n",
+										"value": "-- Atomic insert with content-based duplicate prevention using existing MD5 column\n-- Insert only if content (MD5 + size + tenant/company) doesn't already exist\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME, MD5)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  COALESCE(TRY_CAST('@{if(contains(string(activity('File Size Validation').output), 'size'), activity('File Size Validation').output.size, '0')}' AS NUMBER), 0),\n  COALESCE(TO_TIMESTAMP_NTZ('@{if(contains(string(activity('File Size Validation').output), 'lastModified'), activity('File Size Validation').output.lastModified, '')}'), CURRENT_TIMESTAMP()),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},       \n  @{variables('ResolvedCompanyID')},      \n  '@{pipeline().parameters.tenant_id}',   \n  '@{pipeline().parameters.company_id}',\n  '@{activity('File Size Validation').output.contentMD5}'\nWHERE NOT EXISTS (\n  SELECT 1 FROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE existing\n  WHERE existing.MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    AND existing.SIZE_BYTES = @{activity('File Size Validation').output.size}\n    AND existing.TENANT_ID = @{variables('ResolvedTenantID')}\n    AND existing.COMPANY_ID = @{variables('ResolvedCompanyID')}\n    AND existing.STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n    AND existing.ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\n);\n",
 										"type": "Expression"
 									}
 								}
@@ -1039,9 +1057,9 @@
 						"typeProperties": {
 							"scripts": [
 								{
-									"type": "Query",
+									"type": "NonQuery",
 									"text": {
-										"value": "-- Single atomic operation: Create procedure and execute in one transaction\nBEGIN\n  -- Create the stored procedure (idempotent)\n  CREATE OR REPLACE PROCEDURE RESOLVE_TENANT_COMPANY_IDS(\n    TENANT_NAME STRING,\n    COMPANY_NAME STRING\n  )\n  RETURNS TABLE(RESOLVED_TENANT_ID NUMBER, RESOLVED_COMPANY_ID NUMBER)\n  LANGUAGE SQL\n  AS\n  $$\n  BEGIN\n    -- Upsert tenant\n    MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_TENANT AS tgt\n    USING (SELECT TENANT_NAME AS tenant_name) AS src\n    ON tgt.tenant_name = src.tenant_name\n    WHEN NOT MATCHED THEN\n        INSERT (tenant_name, created_at) VALUES (src.tenant_name, CURRENT_TIMESTAMP());\n\n    -- Get tenant ID  \n    LET resolved_tenant_id := (\n      SELECT tenant_id FROM JAVATEST.TONILO_WAREHOUSE.DIM_TENANT \n      WHERE tenant_name = TENANT_NAME\n    );\n\n    -- Upsert company\n    MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_COMPANY AS tgt\n    USING (SELECT resolved_tenant_id AS tenant_id, COMPANY_NAME AS company_name) AS src\n    ON tgt.tenant_id = src.tenant_id AND tgt.company_name = src.company_name\n    WHEN NOT MATCHED THEN\n        INSERT (tenant_id, company_name, created_at) \n        VALUES (src.tenant_id, src.company_name, CURRENT_TIMESTAMP());\n\n    -- Return both resolved IDs\n    RETURN TABLE(\n      SELECT \n        resolved_tenant_id as RESOLVED_TENANT_ID,\n        (\n          SELECT company_id \n          FROM JAVATEST.TONILO_WAREHOUSE.DIM_COMPANY\n          WHERE tenant_id = resolved_tenant_id AND company_name = COMPANY_NAME\n        ) as RESOLVED_COMPANY_ID\n    );\n  END;\n  $$;\n\n  -- Execute the procedure immediately and return results for ADF variables\n  CALL RESOLVE_TENANT_COMPANY_IDS('@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}');\nEND;",
+										"value": "-- Create atomic identity resolution stored procedure (idempotent)\nCREATE OR REPLACE PROCEDURE RESOLVE_TENANT_COMPANY_IDS(\n  TENANT_NAME STRING,\n  COMPANY_NAME STRING\n)\nRETURNS TABLE(RESOLVED_TENANT_ID NUMBER, RESOLVED_COMPANY_ID NUMBER)\nLANGUAGE SQL\nAS\nBEGIN\n  -- Atomic transaction for identity resolution\n  \n  -- Upsert tenant\n  MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_TENANT AS tgt\n  USING (SELECT TENANT_NAME AS tenant_name) AS src\n  ON tgt.tenant_name = src.tenant_name\n  WHEN NOT MATCHED THEN\n      INSERT (tenant_name, created_at) VALUES (src.tenant_name, CURRENT_TIMESTAMP());\n\n  -- Get tenant ID\n  LET resolved_tenant_id := (\n    SELECT tenant_id FROM JAVATEST.TONILO_WAREHOUSE.DIM_TENANT \n    WHERE tenant_name = TENANT_NAME\n  );\n\n  -- Upsert company\n  MERGE INTO JAVATEST.TONILO_WAREHOUSE.DIM_COMPANY AS tgt\n  USING (SELECT resolved_tenant_id AS tenant_id, COMPANY_NAME AS company_name) AS src\n  ON tgt.tenant_id = src.tenant_id AND tgt.company_name = src.company_name\n  WHEN NOT MATCHED THEN\n      INSERT (tenant_id, company_name, created_at) \n      VALUES (src.tenant_id, src.company_name, CURRENT_TIMESTAMP());\n\n  -- Return both resolved IDs\n  RETURN TABLE(\n    SELECT \n      resolved_tenant_id as RESOLVED_TENANT_ID,\n      (\n        SELECT company_id \n        FROM JAVATEST.TONILO_WAREHOUSE.DIM_COMPANY\n        WHERE tenant_id = resolved_tenant_id AND company_name = COMPANY_NAME\n      ) as RESOLVED_COMPANY_ID\n  );\nEND;",
 										"type": "Expression"
 									}
 								}
@@ -1050,11 +1068,95 @@
 						}
 					},
 					{
-						"name": "Log Pipeline Start",
+						"name": "Call Identity Resolution",
 						"type": "Script",
 						"dependsOn": [
 							{
 								"activity": "Atomic Identity Resolution",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "SnowflakeCN",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "CALL RESOLVE_TENANT_COMPANY_IDS('@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}');",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Set Resolved Variables",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "Call Identity Resolution",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "ResolvedTenantID",
+							"value": {
+								"value": "@string(activity('Call Identity Resolution').output.resultSets[0].rows[0].RESOLVED_TENANT_ID)",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Set Resolved Company ID",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "Set Resolved Variables",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "ResolvedCompanyID",
+							"value": {
+								"value": "@string(activity('Call Identity Resolution').output.resultSets[0].rows[0].RESOLVED_COMPANY_ID)",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Log Pipeline Start",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Set Resolved Company ID",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -1192,6 +1294,14 @@
 					"enable_business_rules_validation": {
 						"type": "bool",
 						"defaultValue": true
+					}
+				},
+				"variables": {
+					"ResolvedTenantID": {
+						"type": "String"
+					},
+					"ResolvedCompanyID": {
+						"type": "String"
 					}
 				},
 				"annotations": [],
