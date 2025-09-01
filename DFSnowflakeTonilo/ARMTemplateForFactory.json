@@ -710,7 +710,7 @@
 							"source": {
 								"type": "SnowflakeV2Source",
 								"query": {
-									"value": "-- Content-based duplicate detection with fallback logic\nSELECT \n  COUNT(*) as duplicate_count,\n  MAX(RELATIVE_PATH) as existing_file_path,\n  MAX(ENQUEUED_AT) as last_processed\nFROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE \nWHERE (\n    -- Primary: MD5-based detection (most accurate)\n    (MD5 IS NOT NULL \n     AND '@{activity('File Size Validation').output.contentMD5}' IS NOT NULL \n     AND MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    )\n    OR\n    -- Fallback: Size + last modified + tenant/company (when MD5 unavailable)\n    (MD5 IS NULL \n     AND SIZE_BYTES = @{activity('File Size Validation').output.size}\n     AND ABS(DATEDIFF('second', LAST_MODIFIED, TO_TIMESTAMP_NTZ('@{activity('File Size Validation').output.lastModified}'))) <= 60\n    )\n  )\n  AND TENANT_ID = @{variables('ResolvedTenantID')}\n  AND COMPANY_ID = @{variables('ResolvedCompanyID')}\n  AND STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n  AND ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\nFOR UPDATE;",
+									"value": "-- Content-based duplicate detection with fallback logic\nSELECT \n  COUNT(*) as duplicate_count,\n  MAX(RELATIVE_PATH) as existing_file_path,\n  MAX(ENQUEUED_AT) as last_processed\nFROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE \nWHERE (\n    -- Primary: MD5-based detection (most accurate)\n    (MD5 IS NOT NULL \n     AND '@{activity('File Size Validation').output.contentMD5}' IS NOT NULL \n     AND MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    )\n    OR\n    -- Fallback: Size + last modified + tenant/company (when MD5 unavailable)\n    (MD5 IS NULL \n     AND SIZE_BYTES = @{activity('File Size Validation').output.size}\n     AND ABS(DATEDIFF('second', LAST_MODIFIED, TO_TIMESTAMP_NTZ('@{activity('File Size Validation').output.lastModified}'))) <= 60\n    )\n  )\n  AND TENANT_ID = @{variables('ResolvedTenantID')}\n  AND COMPANY_ID = @{variables('ResolvedCompanyID')}\n  AND STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n  AND ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP());",
 									"type": "Expression"
 								},
 								"exportSettings": {
@@ -931,7 +931,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "INSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME, MD5)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  COALESCE(TRY_CAST('@{if(contains(string(activity('File Size Validation').output), 'size'), activity('File Size Validation').output.size, '0')}' AS NUMBER), 0),\n  COALESCE(TO_TIMESTAMP_NTZ('@{if(contains(string(activity('File Size Validation').output), 'lastModified'), activity('File Size Validation').output.lastModified, '')}'), CURRENT_TIMESTAMP()),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},       \n  @{variables('ResolvedCompanyID')},      \n  '@{pipeline().parameters.tenant_id}',   \n  '@{pipeline().parameters.company_id}',\n  '@{activity('File Size Validation').output.contentMD5}'\nWHERE NOT EXISTS (\n  SELECT 1 FROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE existing\n  WHERE existing.MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    AND existing.SIZE_BYTES = @{activity('File Size Validation').output.size}\n    AND existing.TENANT_ID = @{variables('ResolvedTenantID')}\n    AND existing.COMPANY_ID = @{variables('ResolvedCompanyID')}\n    AND existing.STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n    AND existing.ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\n);\n",
+										"value": "INSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME, MD5)\nVALUES\n(\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  @{activity('File Size Validation').output.size},\n  TO_TIMESTAMP_NTZ('@{activity('File Size Validation').output.lastModified}'),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},\n  @{variables('ResolvedCompanyID')},\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{activity('File Size Validation').output.contentMD5}'\n);",
 										"type": "Expression"
 									}
 								}
@@ -1188,7 +1188,7 @@
 							"source": {
 								"type": "SnowflakeV2Source",
 								"query": {
-									"value": "SELECT company_ID\nFROM javatest.tonilo_warehouse.dim_company\nWHERE tenant_ID = '@{variables('ResolvedTenantID')}'\n  AND company_name = '@{pipeline().parameters.company_id}'\n",
+									"value": "SELECT company_ID\nFROM javatest.tonilo_warehouse.dim_company\nWHERE tenant_ID = @{variables('ResolvedTenantID')}\n  AND company_name = '@{pipeline().parameters.company_id}'",
 									"type": "Expression"
 								},
 								"exportSettings": {
