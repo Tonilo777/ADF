@@ -1101,7 +1101,7 @@
 								{
 									"type": "NonQuery",
 									"text": {
-										"value": "INSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME, MD5)\nVALUES\n(\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  @{activity('File Size Validation').output.size},\n  TO_TIMESTAMP_NTZ('@{activity('File Size Validation').output.lastModified}'),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},\n  @{variables('ResolvedCompanyID')},\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{activity('File Size Validation').output.contentMD5}'\n);",
+										"value": "INSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME, MD5)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  @{activity('File Size Validation').output.size},\n  TO_TIMESTAMP_NTZ('@{activity('File Size Validation').output.lastModified}'),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},\n  @{variables('ResolvedCompanyID')},\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{activity('File Size Validation').output.contentMD5}'\n",
 										"type": "Expression"
 									}
 								}
