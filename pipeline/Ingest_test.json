@@ -39,7 +39,8 @@
 					"fieldList": [
 						"size",
 						"lastModified",
-						"exists"
+						"exists",
+						"contentMD5"
 					],
 					"storeSettings": {
 						"type": "AzureBlobStorageReadSettings",
@@ -65,7 +66,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"expression": {
-						"value": "@equals(activity('File Size Validation').Status, 'Succeeded')",
+						"value": "@and(equals(activity('File Size Validation').Status, 'Succeeded'), lessOrEquals(activity('File Size Validation').output.size, pipeline().parameters.max_file_size_bytes))",
 						"type": "Expression"
 					},
 					"ifFalseActivities": [
@@ -131,7 +132,7 @@
 					"source": {
 						"type": "SnowflakeV2Source",
 						"query": {
-							"value": "SELECT COUNT(*) as duplicate_count\nFROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE \nWHERE RELATIVE_PATH = '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}'\n  AND STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n  AND ENQUEUED_AT >= DATEADD('hour', -24, CURRENT_TIMESTAMP());",
+							"value": "-- Content-based duplicate detection with fallback logic\nSELECT \n  COUNT(*) as duplicate_count,\n  MAX(RELATIVE_PATH) as existing_file_path,\n  MAX(ENQUEUED_AT) as last_processed\nFROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE \nWHERE (\n    -- Primary: MD5-based detection (most accurate)\n    (CONTENT_MD5 IS NOT NULL \n     AND '@{activity('File Size Validation').output.contentMD5}' IS NOT NULL \n     AND CONTENT_MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    )\n    OR\n    -- Fallback: Size + last modified + tenant/company (when MD5 unavailable)\n    (CONTENT_MD5 IS NULL \n     AND SIZE_BYTES = @{activity('File Size Validation').output.size}\n     AND ABS(DATEDIFF('second', LAST_MODIFIED, TO_TIMESTAMP_NTZ('@{activity('File Size Validation').output.lastModified}'))) <= 60\n    )\n  )\n  AND TENANT_ID = @{variables('ResolvedTenantID')}\n  AND COMPANY_ID = @{variables('ResolvedCompanyID')}\n  AND STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n  AND ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\nFOR UPDATE;",
 							"type": "Expression"
 						},
 						"exportSettings": {
@@ -183,7 +184,7 @@
 									{
 										"type": "NonQuery",
 										"text": {
-											"value": "-- Log the validation error\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT \n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'Duplicate file detected - pipeline terminated',\n  OBJECT_CONSTRUCT('duplicateCount', '@{activity('Duplicate File Check').output.firstRow.DUPLICATE_COUNT}');\n\n-- Mark file as duplicate/failed in queue\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, ERROR, FINISHED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  0,\n  CURRENT_TIMESTAMP(),\n  'DUPLICATE',\n  0,\n  CURRENT_TIMESTAMP(),\n  OBJECT_CONSTRUCT('errorType', 'DUPLICATE_FILE', 'errorMessage', 'Duplicate file detected', 'duplicateCount', @{activity('Duplicate File Check').output.firstRow.DUPLICATE_COUNT}),\n  CURRENT_TIMESTAMP(),\n  COALESCE(TRY_CAST('@{variables('ResolvedTenantID')}' AS NUMBER), 0),\n  COALESCE(TRY_CAST('@{variables('ResolvedCompanyID')}' AS NUMBER), 0),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}';",
+											"value": "-- Log the validation error with enhanced duplicate information\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nVALUES (\n  UUID_STRING(),\n  'Ingest_test',\n  '@{pipeline().RunId}',\n  'VALIDATION_ERROR',\n  CURRENT_TIMESTAMP(),\n  '@{pipeline().parameters.tenant_id}',\n  '@{pipeline().parameters.company_id}',\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  'Content-based duplicate file detected - pipeline terminated',\n  OBJECT_CONSTRUCT(\n    'errorType', 'CONTENT_DUPLICATE',\n    'duplicateCount', '@{activity('Duplicate File Check').output.firstRow.DUPLICATE_COUNT}',\n    'existingFilePath', '@{activity('Duplicate File Check').output.firstRow.EXISTING_FILE_PATH}',\n    'contentMD5', '@{activity('File Size Validation').output.contentMD5}',\n    'fileSize', '@{activity('File Size Validation').output.size}',\n    'lastProcessed', '@{activity('Duplicate File Check').output.firstRow.LAST_PROCESSED}'\n  )\n);\n\n-- DO NOT insert duplicate into queue - skip insertion entirely for true duplicates",
 											"type": "Expression"
 										}
 									}
@@ -319,62 +320,13 @@
 				}
 			},
 			{
-				"name": "Get Metadata1",
-				"type": "GetMetadata",
+				"name": "Ingest queue",
+				"type": "Script",
 				"dependsOn": [
 					{
 						"activity": "Business Rules Check",
 						"dependencyConditions": [
 							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"dataset": {
-						"referenceName": "DS_tenant1Sink",
-						"type": "DatasetReference",
-						"parameters": {
-							"companyFolder": {
-								"value": "@pipeline().parameters.sub_path",
-								"type": "Expression"
-							},
-							"fileName": {
-								"value": "@pipeline().parameters.file_name",
-								"type": "Expression"
-							}
-						}
-					},
-					"fieldList": [
-						"size",
-						"lastModified",
-						"contentMD5"
-					],
-					"storeSettings": {
-						"type": "AzureBlobStorageReadSettings",
-						"recursive": true,
-						"enablePartitionDiscovery": false
-					},
-					"formatSettings": {
-						"type": "BinaryReadSettings"
-					}
-				}
-			},
-			{
-				"name": "Ingest queue",
-				"type": "Script",
-				"dependsOn": [
-					{
-						"activity": "Get Metadata1",
-						"dependencyConditions": [
-							"Completed"
 						]
 					},
 					{
@@ -386,7 +338,7 @@
 				],
 				"policy": {
 					"timeout": "0.12:00:00",
-					"retry": 0,
+					"retry": 3,
 					"retryIntervalInSeconds": 30,
 					"secureOutput": false,
 					"secureInput": false
@@ -401,7 +353,7 @@
 						{
 							"type": "NonQuery",
 							"text": {
-								"value": "INSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  COALESCE(TRY_CAST('@{if(contains(string(activity('Get Metadata1').output), 'size'), activity('Get Metadata1').output.size, '0')}' AS NUMBER), 0),\n  COALESCE(TO_TIMESTAMP_NTZ('@{if(contains(string(activity('Get Metadata1').output), 'lastModified'), activity('Get Metadata1').output.lastModified, '')}'), CURRENT_TIMESTAMP()),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},       \n  @{variables('ResolvedCompanyID')},      \n  '@{pipeline().parameters.tenant_id}',   \n  '@{pipeline().parameters.company_id}'\n",
+								"value": "-- Atomic insert with content-based duplicate prevention\n-- First, add CONTENT_MD5 column if it doesn't exist (safe to run multiple times)\nALTER TABLE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE ADD COLUMN IF NOT EXISTS CONTENT_MD5 STRING;\n\n-- Insert only if content (MD5 + size + tenant/company) doesn't already exist\nINSERT INTO JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\n(QUEUE_ID, RELATIVE_PATH, SIZE_BYTES, LAST_MODIFIED, STATUS, ATTEMPTS, ENQUEUED_AT, TENANT_ID, COMPANY_ID, TENANT_NAME, COMPANY_NAME, CONTENT_MD5)\nSELECT\n  UUID_STRING(),\n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}',\n  COALESCE(TRY_CAST('@{if(contains(string(activity('File Size Validation').output), 'size'), activity('File Size Validation').output.size, '0')}' AS NUMBER), 0),\n  COALESCE(TO_TIMESTAMP_NTZ('@{if(contains(string(activity('File Size Validation').output), 'lastModified'), activity('File Size Validation').output.lastModified, '')}'), CURRENT_TIMESTAMP()),\n  'QUEUED',\n  0,\n  CURRENT_TIMESTAMP(),\n  @{variables('ResolvedTenantID')},       \n  @{variables('ResolvedCompanyID')},      \n  '@{pipeline().parameters.tenant_id}',   \n  '@{pipeline().parameters.company_id}',\n  '@{activity('File Size Validation').output.contentMD5}'\nWHERE NOT EXISTS (\n  SELECT 1 FROM JAVATEST.JAVATEST1.MDB_INGEST_QUEUE existing\n  WHERE existing.CONTENT_MD5 = '@{activity('File Size Validation').output.contentMD5}'\n    AND existing.SIZE_BYTES = @{activity('File Size Validation').output.size}\n    AND existing.TENANT_ID = @{variables('ResolvedTenantID')}\n    AND existing.COMPANY_ID = @{variables('ResolvedCompanyID')}\n    AND existing.STATUS IN ('QUEUED', 'PROCESSING', 'COMPLETED')\n    AND existing.ENQUEUED_AT >= DATEADD('day', -7, CURRENT_TIMESTAMP())\n);\n",
 								"type": "Expression"
 							}
 						}
@@ -422,8 +374,8 @@
 				],
 				"policy": {
 					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
 					"secureOutput": false,
 					"secureInput": false
 				},
@@ -434,6 +386,13 @@
 				},
 				"typeProperties": {
 					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "-- Update status to PROCESSING before calling stored procedure\nUPDATE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\nSET STATUS = 'PROCESSING', \n    ATTEMPTS = ATTEMPTS + 1\nWHERE RELATIVE_PATH = '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}'\n  AND STATUS = 'QUEUED';",
+								"type": "Expression"
+							}
+						},
 						{
 							"type": "Query",
 							"text": "CALL JAVATEST.JAVATEST1.PROC_INGEST_NEXT_MDB2()"
@@ -724,42 +683,6 @@
 				}
 			},
 			{
-				"name": "Log Get Metadata Error",
-				"type": "Script",
-				"dependsOn": [
-					{
-						"activity": "Get Metadata1",
-						"dependencyConditions": [
-							"Failed"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"linkedServiceName": {
-					"referenceName": "SnowflakeCN",
-					"type": "LinkedServiceReference"
-				},
-				"typeProperties": {
-					"scripts": [
-						{
-							"type": "NonQuery",
-							"text": {
-								"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, ERROR_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE, ERROR_DETAILS)\nSELECT\nUUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'ERROR', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Get Metadata failed', '@{activity('Get Metadata1').error.message}'",
-								"type": "Expression"
-							}
-						}
-					],
-					"scriptBlockExecutionTimeout": "02:00:00"
-				}
-			},
-			{
 				"name": "Log DBT Error",
 				"type": "Script",
 				"dependsOn": [
@@ -823,7 +746,7 @@
 						{
 							"type": "NonQuery",
 							"text": {
-								"value": "INSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nSELECT\nUUID_STRING(), 'Ingest_test', '@{pipeline().RunId}', 'SUCCESS', CURRENT_TIMESTAMP(), '@{pipeline().parameters.tenant_id}', '@{pipeline().parameters.company_id}', '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', 'Pipeline completed successfully'",
+								"value": "-- Log success and update queue status to COMPLETED\nINSERT INTO JAVATEST.JAVATEST1.PIPELINE_EXECUTION_LOG\n(LOG_ID, PIPELINE_NAME, PIPELINE_RUN_ID, STATUS, END_TIME, TENANT_ID, COMPANY_ID, FILE_PATH, MESSAGE)\nVALUES (\n  UUID_STRING(), \n  'Ingest_test', \n  '@{pipeline().RunId}', \n  'SUCCESS', \n  CURRENT_TIMESTAMP(), \n  '@{pipeline().parameters.tenant_id}', \n  '@{pipeline().parameters.company_id}', \n  '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}', \n  'Pipeline completed successfully'\n);\n\n-- Update queue status to COMPLETED\nUPDATE JAVATEST.JAVATEST1.MDB_INGEST_QUEUE\nSET STATUS = 'COMPLETED',\n    FINISHED_AT = CURRENT_TIMESTAMP()\nWHERE RELATIVE_PATH = '@{concat(pipeline().parameters.sub_path, '/', pipeline().parameters.file_name)}'\n  AND STATUS = 'PROCESSING';",
 								"type": "Expression"
 							}
 						}
